@@ -13,7 +13,7 @@ const client = new docParser.Client(apiKey); // api key
 const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
-const jsonFolder = path.resolve(__dirname + fsFolder + 'json\\');
+const jsonFolder = path.resolve(fsFolder + '\\json\\');
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
 //const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
@@ -71,29 +71,53 @@ function isDir(path) {
 // client.uploadFileByPath('PARSER_ID', './test.pdf', {remote_id: guid})
 // const pattern = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', 'i');
 
-fs.readdir(fsFolder, (err, files) => {
+async function recGetResultsByDocument(parserId, docId, file, jFolder) {
+    await client.getResultsByDocument(parserId, docId, {format: 'object'})
+    .then(function (res) {
+        console.log(res);
+        const json = JSON.stringify(res);
+        fs.writeFile(jFolder+file + '.' +parserId + '.json', json)
+        .then(function() {
+            // upload json documents to mongdb from here
+        });
+    })
+    .catch(function (err) {
+        console.log(err);
+    });
+}
+
+await fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
         const filePath = path.resolve(fsFolder + "\\" + file);
         let isDirectory = isDir(filePath);
-        if(isDirectory === false){
+        if(isDirectory === false) {
             console.log("Reading: ", filePath);
             console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
             //const guid = file.split(".", pattern);
             client.uploadFileByPath(parser.id, filePath).then(function (result) {
                 console.log(result);
-                client.getResultsByDocument(parser.id, result.id, {format: 'object'})
-                .then(function (res) {
-                    console.log(res);
-                    const json = JSON.stringify(res);
-                    fs.writeFile(jsonFolder+file + '.' +parser.id + '.json', json)
-                    .then(function() {
-                        // upload json documents to mongdb from here
-                    });
-                })
-                .catch(function (err) {
-                    console.log(err)
+                console.log("Processing: ", result.id);
+                const json = JSON.stringify({ id: result.id });
+                console.log("Saving to json document to: ", jsonFolder);
+                const jsonPath = path.resolve(jsonFolder + "\\" + result.id + ".json");
+                fs.writeFile(jsonPath, json, (err) => {
+                    if (err) throw err;
+                        console.log('The file has been saved!');
                 })
             })
+                //recGetResultsByDocument(parser.id, result.id, file, jsonFolder);
+                // client.getResultsByDocument(parser.id, result.id, {format: 'object'})
+                // .then(function (res) {
+                //     console.log(res);
+                //     const json = JSON.stringify(res);
+                //     fs.writeFile(jsonFolder+file + '.' +parser.id + '.json', json)
+                //     .then(function() {
+                //         // upload json documents to mongdb from here
+                //     });
+                // })
+                // .catch(function (err) {
+                //     console.log(err)
+                // });
             .catch(function (err) {
                 console.log(err)
             });
