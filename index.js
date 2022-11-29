@@ -1,17 +1,24 @@
 import docParser from 'docparser-node';
 import fs from 'fs';
 import process from 'dotenv'
-process.config({path: '.env'});
+import path from 'path';
+const __dirname = path.dirname('./');
+console.log("Working Directory: ", __dirname)
+const env = process.config({path: path.resolve(__dirname + '\\.env')});
+console.log(env);
 
-//const apiKey = process.env.APIKEY
-//const fsVobFolder = process.env.FSVOBFOLDER
-//const vobParserId = process.env.VOBPARSERID
-//const jsonVobFolder = process.env.JSONVOBFOLDER
+const apiKey = env.parsed.APIKEY
+console.log("Using API Key: ", apiKey);
+const client = new docParser.Client(apiKey); // api key
+const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
+console.log("@Subdirectory: ", fsFolder);
+const parserId = env.parsed.VOBPARSERID
+const jsonFolder = path.resolve(__dirname + fsFolder + 'json\\');
 
-const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
-const fsFolder = 'fs/vobs/' // path of vob files
-const jsonVobFolder = fsFolder + 'json/';
-const parserId = 'shodskezdfwg'; // for parsing vobs
+//const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
+//const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
+//const fsFolder = 'fs/vobs/' // path of vob files
+//const parserId = 'shodskezdfwg'; // for parsing vobs
 
 client.ping().then(function(){
     console.log('Connection established');
@@ -51,32 +58,46 @@ function getData(parserId) {
     })
 }
 
+function isDir(path) {
+    try {
+        var stat = fs.lstatSync(path);
+        return stat.isDirectory();
+    } catch (e) {
+        // lstatSync throws an error if path doesn't exist
+        return false;
+    }
+}
+
 // client.uploadFileByPath('PARSER_ID', './test.pdf', {remote_id: guid})
 // const pattern = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', 'i');
 
 fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
-        console.log(file);
-        console.log('Uploading file: ' + file + " to Parser: " + parser.id);
-        //const guid = file.split(".", pattern);
-        client.uploadFileByPath(parser.id, fsFolder + file).then(function (result) {
-            console.log(result);
-            client.getResultsByDocument(parser.id, result.id, {format: 'object'})
-            .then(function (res) {
-                console.log(res);
-                const json = JSON.stringify(res);
-                fs.writeFile(jsonVobFolder+file + '.' +parser.id + '.json', json)
-                .then(function() {
-                    // upload json documents to mongdb from here
-                });
+        const filePath = path.resolve(fsFolder + "\\" + file);
+        let isDirectory = isDir(filePath);
+        if(isDirectory === false){
+            console.log("Reading: ", filePath);
+            console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
+            //const guid = file.split(".", pattern);
+            client.uploadFileByPath(parser.id, filePath).then(function (result) {
+                console.log(result);
+                client.getResultsByDocument(parser.id, result.id, {format: 'object'})
+                .then(function (res) {
+                    console.log(res);
+                    const json = JSON.stringify(res);
+                    fs.writeFile(jsonFolder+file + '.' +parser.id + '.json', json)
+                    .then(function() {
+                        // upload json documents to mongdb from here
+                    });
+                })
+                .catch(function (err) {
+                    console.log(err)
+                })
             })
             .catch(function (err) {
                 console.log(err)
-            })
-        })
-        .catch(function (err) {
-            console.log(err)
-        });
+            });
+        }
     });
 });
 
