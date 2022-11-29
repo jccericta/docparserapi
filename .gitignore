@@ -1,3 +1,5 @@
 .env
 node_modules
-fs/
+fs/vobs/*.pdfs
+!fs/vobs/Test.pdf
+fs/vobs/json/*.json
