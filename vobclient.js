@@ -2,6 +2,7 @@ import docParser from 'docparser-node';
 import fs from 'fs';
 import process from 'dotenv'
 import path from 'path';
+import mongodb from 'mongodb';
 const __dirname = path.dirname('./');
 console.log("Working Directory: ", __dirname)
 const env = process.config({path: path.resolve(__dirname + '\\.env')});
@@ -14,6 +15,7 @@ const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
 const jsonFolder = path.resolve(fsFolder + '\\json\\');
+const connStr = env.parsed.CONNECTION_STRING;
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
 //const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
@@ -80,12 +82,40 @@ async function getResultsByDocument(parserId, docId, file) {
         console.log("Saving to document: ", file)
         fs.writeFile(file, jsonStr, function(err){
             if(err) throw err;
-            console.log("Successfully overwritten: ", file)
+            console.log("Successfully overwritten: ", file);
+            return res;
         }); 
     })
     .catch(function (err) {
         console.log(err);
+        return false;
     });
+}
+
+async function main(data, cStr) {
+    console.log("Connecting to MongoDB: ", cStr);
+    const client = new mongodb.MongoClient(cStr);
+    try {
+        await client.connect();
+        const db = await client.db("VOB");
+        console.log("Database: ", db.databaseName);
+        const rc = await db.collection("Hansei");
+        console.log("Collection: ", rc.collectionName);
+        await rc.insertOne(data)
+        .then(function (result) {
+            console.log(result);
+        }).catch(err => console.log(err));
+        //console.log("Looking for messages ...")
+        //var query = {"message": /^Hello/};
+        //const mgs = await rc.find(query).toArray();
+        //console.log(mgs);
+    }
+    catch(err) {
+        console.log(err);
+    }
+    finally {
+        await client.close();
+    }
 }
 
 await fs.readdir(jsonFolder, (err, files) => {
@@ -95,35 +125,8 @@ await fs.readdir(jsonFolder, (err, files) => {
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
             const id = file.split(".")[0]; // grabs the id from file name
-            getResultsByDocument(parserId, id, filePath);
-            //const guid = file.split(".", pattern);
-            // client.uploadFileByPath(parser.id, filePath).then(function (result) {
-            //     console.log(result);
-            //     console.log("Processing: ", result.id);
-            //     const json = JSON.stringify({ id: result.id });
-            //     console.log("Saving to json document to: ", jsonFolder);
-            //     const jsonPath = path.resolve(jsonFolder + "\\" + result.id + ".json");
-            //     fs.writeFile(jsonPath, json, (err) => {
-            //         if (err) throw err;
-            //             console.log('The file has been saved!');
-            //     })
-            // });
-                //recGetResultsByDocument(parser.id, result.id, file, jsonFolder);
-                // client.getResultsByDocument(parser.id, result.id, {format: 'object'})
-                // .then(function (res) {
-                //     console.log(res);
-                //     const json = JSON.stringify(res);
-                //     fs.writeFile(jsonFolder+file + '.' +parser.id + '.json', json)
-                //     .then(function() {
-                //         // upload json documents to mongdb from here
-                //     });
-                // })
-                // .catch(function (err) {
-                //     console.log(err)
-                // });
-            // .catch(function (err) {
-            //     console.log(err)
-            // });
+            const data = getResultsByDocument(parser.id, id, filePath);
+            main(data, connStr).catch(err => console.log(err));
         }
     });
 });
