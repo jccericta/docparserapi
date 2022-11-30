@@ -73,17 +73,20 @@ function isDir(path) {
 // client.uploadFileByPath('PARSER_ID', './test.pdf', {remote_id: guid})
 // const pattern = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', 'i');
 
-async function getResultsByDocument(parserId, docId, file) {
+async function getResultsByDocument(parserId, docId, file, callback) {
     await client.getResultsByDocument(parserId, docId, {format: 'object'})
     .then(function (res) {
-        console.log(res);
+        console.log("Retrieved DocParser Data: ", res);
         const json = res;
         const jsonStr = JSON.stringify(json);
         console.log("Saving to document: ", file)
         fs.writeFile(file, jsonStr, function(err){
             if(err) throw err;
             console.log("Successfully overwritten: ", file);
-            return res;
+            const document = fs.readFileSync(file, 'utf8');
+	    const data = JSON.parse(document);
+	    console.log("Parsed Data: ", data[0]);
+            callback(data[0]);
         }); 
     })
     .catch(function (err) {
@@ -101,14 +104,10 @@ async function main(data, cStr) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Hansei");
         console.log("Collection: ", rc.collectionName);
-        await rc.insertOne(data)
+	await rc.insertOne(data)
         .then(function (result) {
             console.log(result);
         }).catch(err => console.log(err));
-        //console.log("Looking for messages ...")
-        //var query = {"message": /^Hello/};
-        //const mgs = await rc.find(query).toArray();
-        //console.log(mgs);
     }
     catch(err) {
         console.log(err);
@@ -125,8 +124,9 @@ await fs.readdir(jsonFolder, (err, files) => {
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
             const id = file.split(".")[0]; // grabs the id from file name
-            const data = getResultsByDocument(parser.id, id, filePath);
-            main(data, connStr).catch(err => console.log(err));
+            getResultsByDocument(parser.id, id, filePath, function(data){
+	    	main(data, connStr).catch(err => console.log(err));
+	    });
         }
     });
 });
