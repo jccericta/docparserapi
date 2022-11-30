@@ -3,18 +3,18 @@ import fs from 'fs';
 import process from 'dotenv'
 import path from 'path';
 import mongodb from 'mongodb';
-const __dirname = path.dirname('./');
+const __dirname = path.dirname('.');
 console.log("Working Directory: ", __dirname)
-const env = process.config({path: path.resolve(__dirname + '\\.env')});
+const env = process.config({path: path.resolve('.env')});
 console.log(env);
 
 const apiKey = env.parsed.APIKEY
 console.log("Using API Key: ", apiKey);
 const client = new docParser.Client(apiKey); // api key
-const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
+const fsFolder = env.parsed.FSVOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
-const jsonFolder = path.resolve(fsFolder + '\\json\\');
+const jsonFolder = fsFolder + '/json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
@@ -76,7 +76,7 @@ function isDir(path) {
 async function getResultsByDocument(parserId, docId, file, callback) {
     await client.getResultsByDocument(parserId, docId, {format: 'object'})
     .then(function (res) {
-        console.log("Retrieved Parsed Data: ", res);
+        console.log("Retrieved DocParser Data: ", res);
         const json = res;
         const jsonStr = JSON.stringify(json);
         console.log("Saving to document: ", file)
@@ -84,8 +84,8 @@ async function getResultsByDocument(parserId, docId, file, callback) {
             if(err) throw err;
             console.log("Successfully overwritten: ", file);
             const document = fs.readFileSync(file, 'utf8');
-            const data = JSON.parse(document);
-            console.log("Parsed Data: ", data[0]);
+	    const data = JSON.parse(document);
+	    console.log("Parsed Data: ", data[0]);
             callback(data[0]);
         }); 
     })
@@ -104,14 +104,10 @@ async function main(data, cStr) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Hansei");
         console.log("Collection: ", rc.collectionName);
-        await rc.insertMany(data)
+	await rc.insertOne(data)
         .then(function (result) {
             console.log(result);
         }).catch(err => console.log(err));
-        //console.log("Looking for messages ...")
-        //var query = {"message": /^Hello/};
-        //const mgs = await rc.find(query).toArray();
-        //console.log(mgs);
     }
     catch(err) {
         console.log(err);
@@ -123,14 +119,14 @@ async function main(data, cStr) {
 
 await fs.readdir(jsonFolder, (err, files) => {
     files.forEach(file => {
-        const filePath = path.resolve(jsonFolder + "\\" + file);
+        const filePath = path.resolve(jsonFolder + "/" + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
             const id = file.split(".")[0]; // grabs the id from file name
             getResultsByDocument(parser.id, id, filePath, function(data){
-                main(data, connStr).catch(err => console.log(err));
-            });
+	    	main(data, connStr).catch(err => console.log(err));
+	    });
         }
     });
 });

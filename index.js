@@ -2,18 +2,18 @@ import docParser from 'docparser-node';
 import fs from 'fs';
 import process from 'dotenv'
 import path from 'path';
-const __dirname = path.dirname('./');
+const __dirname = path.dirname('.');
 console.log("Working Directory: ", __dirname)
-const env = process.config({path: path.resolve(__dirname + '\\.env')});
+const env = process.config({path: path.resolve('.env')});
 console.log(env);
 
 const apiKey = env.parsed.APIKEY
 console.log("Using API Key: ", apiKey);
 const client = new docParser.Client(apiKey); // api key
-const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
+const fsFolder = env.parsed.FSVOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
-const jsonFolder = path.resolve(fsFolder + '\\json\\');
+const jsonFolder = fsFolder + '/json/';
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
 //const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
@@ -76,7 +76,7 @@ async function recGetResultsByDocument(parserId, docId, file, jFolder) {
     .then(function (res) {
         console.log(res);
         const json = JSON.stringify(res);
-        fs.writeFile(jFolder+file + '.' +parserId + '.json', json)
+        fs.writeFile(jFolder + file + '.' +parserId + '.json', json)
         .then(function() {
             // upload json documents to mongdb from here
         });
@@ -88,7 +88,7 @@ async function recGetResultsByDocument(parserId, docId, file, jFolder) {
 
 await fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
-        const filePath = path.resolve(fsFolder + "\\" + file);
+        const filePath = path.resolve(fsFolder + "/" + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
@@ -99,11 +99,11 @@ await fs.readdir(fsFolder, (err, files) => {
                 console.log("Processing: ", result.id);
                 const json = JSON.stringify({ id: result.id });
                 console.log("Saving to json document to: ", jsonFolder);
-                const jsonPath = path.resolve(jsonFolder + "\\" + result.id + ".json");
+                const jsonPath = path.resolve(jsonFolder + result.id + ".json");
                 fs.writeFile(jsonPath, json, (err) => {
                     if (err) throw err;
                         console.log('The file has been saved!');
-                })
+                });
             })
                 //recGetResultsByDocument(parser.id, result.id, file, jsonFolder);
                 // client.getResultsByDocument(parser.id, result.id, {format: 'object'})
