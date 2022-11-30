@@ -3,18 +3,18 @@ import fs from 'fs';
 import process from 'dotenv'
 import path from 'path';
 import mongodb from 'mongodb';
-const __dirname = path.dirname('./');
+const __dirname = path.dirname('.');
 console.log("Working Directory: ", __dirname)
-const env = process.config({path: path.resolve(__dirname + '\\.env')});
+const env = process.config({path: path.resolve('.env')});
 console.log(env);
 
 const apiKey = env.parsed.APIKEY
 console.log("Using API Key: ", apiKey);
 const client = new docParser.Client(apiKey); // api key
-const fsFolder = path.resolve(__dirname + env.parsed.FSVOBFOLDER);
+const fsFolder = env.parsed.FSVOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
-const jsonFolder = path.resolve(fsFolder + '\\json\\');
+const jsonFolder = fsFolder + '/json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
@@ -120,7 +120,7 @@ async function main(data, cStr) {
 
 await fs.readdir(jsonFolder, (err, files) => {
     files.forEach(file => {
-        const filePath = path.resolve(jsonFolder + "\\" + file);
+        const filePath = path.resolve(jsonFolder + "/" + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
