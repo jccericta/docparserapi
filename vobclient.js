@@ -85,7 +85,7 @@ async function getResultsByDocument(parserId, docId, file, callback) {
             console.log("Successfully overwritten: ", file);
             const document = fs.readFileSync(file, 'utf8');
 	    const data = JSON.parse(document);
-	    console.log("Parsed Data: ", data[0]);
+	    //console.log("Parsed Data: ", data[0]);
             callback(data[0]);
         }); 
     })

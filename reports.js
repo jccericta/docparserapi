@@ -112,7 +112,7 @@ async function main(cStr, fs) {
             console.log(result);
         }).catch(err => console.log(err));*/
 	const docs = await rc.find({}).toArray();
-	docs.forEach(d => delete d.prepend);
+	//docs.forEach(d => delete d.prepend);
 	jsonexport(docs,{verticalOutput: false}, function(err, csvData){
 	   if (err) throw err;
 	   //const csvDataArray = csvData.split(",");
@@ -126,7 +126,7 @@ async function main(cStr, fs) {
 	   });
 	});
 	console.log("Documents found: ", await rc.count());
-	console.log("Documents: ", docs);
+	//console.log("Documents: ", docs);
 	await client.close();
     }
     catch(err) {
