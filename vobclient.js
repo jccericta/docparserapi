@@ -134,4 +134,3 @@ await fs.readdir(jsonFolder, (err, files) => {
         }
     });
 });
-
