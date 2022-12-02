@@ -91,6 +91,7 @@ await fs.readdir(fsFolder, (err, files) => {
         const filePath = path.resolve(fsFolder + "/" + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
+	    if(file.search("VOB") !== -1) {
             console.log("Reading: ", filePath);
             console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
             //const guid = file.split(".", pattern);
@@ -121,6 +122,7 @@ await fs.readdir(fsFolder, (err, files) => {
             .catch(function (err) {
                 console.log(err)
             });
+	  }
         }
     });
 });
