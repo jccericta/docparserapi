@@ -9,8 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "convert-array-to-csv": "^2.0.0",
     "docparser-node": "^1.2.2",
     "dotenv": "^16.0.3",
+    "fast-csv": "^4.3.6",
+    "jsonexport": "^3.2.0",
     "mongodb": "^4.12.1"
   },
   "type": "module"
