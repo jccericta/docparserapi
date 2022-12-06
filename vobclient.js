@@ -76,7 +76,7 @@ function isDir(path) {
 async function getResultsByDocument(parserId, docId, file, callback) {
     await client.getResultsByDocument(parserId, docId, {format: 'object'})
     .then(function (res) {
-        console.log("Retrieved DocParser Data: ", res);
+        //console.log("Retrieved DocParser Data: ", res);
         const json = res;
         const jsonStr = JSON.stringify(json);
         console.log("Saving to document: ", file)
@@ -119,7 +119,7 @@ async function main(data, cStr) {
 
 await fs.readdir(jsonFolder, (err, files) => {
     files.forEach(file => {
-        const filePath = path.resolve(jsonFolder + "/" + file);
+        const filePath = path.resolve(jsonFolder + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
             console.log("Reading: ", filePath);

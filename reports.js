@@ -17,7 +17,7 @@ console.log("Using API Key: ", apiKey);
 const fsFolder = env.parsed.FSVOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
 //const parserId = env.parsed.VOBPARSERID
-const jsonFolder = fsFolder + '/json/';
+const jsonFolder = fsFolder + 'json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";

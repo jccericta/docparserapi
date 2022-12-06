@@ -13,7 +13,7 @@ const client = new docParser.Client(apiKey); // api key
 const fsFolder = env.parsed.FSVOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.VOBPARSERID
-const jsonFolder = fsFolder + '/json/';
+const jsonFolder = fsFolder + 'json/';
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
 //const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
@@ -88,7 +88,7 @@ async function recGetResultsByDocument(parserId, docId, file, jFolder) {
 
 await fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
-        const filePath = path.resolve(fsFolder + "/" + file);
+        const filePath = path.resolve(fsFolder + file);
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
 	    if(file.search("VOB") !== -1) {
