@@ -1,5 +1,7 @@
 .env
 node_modules/
 fs/vobs/*.pdfs
+fs/vobs/processed_vobs/*.pdf
 !fs/vobs/Test.pdf
 fs/vobs/json/*.json
+fs/vobs/json/processed_json/*.json
