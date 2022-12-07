@@ -90,7 +90,7 @@ await fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
         const filePath = path.resolve(fsFolder + file);
         let isDirectory = isDir(filePath);
-        if(isDirectory === false) {
+        if(isDirectory === false && file !== "Test.pdf") {
 	    if(file.search("VOB") !== -1) {
             console.log("Reading: ", filePath);
             console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
