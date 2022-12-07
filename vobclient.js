@@ -104,10 +104,16 @@ async function main(data, cStr) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Hansei");
         console.log("Collection: ", rc.collectionName);
-	await rc.insertOne(data)
+	const query = { document_id: data["document_id"] };
+	const update = { $set: data };
+	const options = { upsert:true };
+	await rc.updateOne(query, update, options).then(function (result){
+	   console.log(result);
+	}).catch(err => console.log(err));
+	/*await rc.insertOne(data)
         .then(function (result) {
             console.log(result);
-        }).catch(err => console.log(err));
+        }).catch(err => console.log(err));*/
     }
     catch(err) {
         console.log(err);
