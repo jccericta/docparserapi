@@ -17,11 +17,6 @@ const parserId = env.parsed.VOBPARSERID
 const jsonFolder = fsFolder + 'json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
-//const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
-//const client = new docParser.Client("810fa30e4ff6186e3b886f0c7f37411dbd85a778"); // api key
-//const fsFolder = 'fs/vobs/' // path of vob files
-//const parserId = 'shodskezdfwg'; // for parsing vobs
-
 client.ping().then(function(){
     console.log('Connection established');
 }).catch(function(err){
@@ -95,7 +90,7 @@ async function getResultsByDocument(parserId, docId, file, callback) {
     });
 }
 
-async function main(data, cStr) {
+async function main(data, cStr, j, fp, f) {
     console.log("Connecting to MongoDB: ", cStr);
     const client = new mongodb.MongoClient(cStr);
     try {
@@ -109,6 +104,11 @@ async function main(data, cStr) {
 	const options = { upsert:true };
 	await rc.updateOne(query, update, options).then(function (result){
 	   console.log(result);
+           const json_processed = path.resolve(j + 'processed_json/' + f);
+           fs.rename(fp, json_processed, function(err) {
+           if(err) throw err;
+    	   console.log("Successfully moved " + fp + " to" + json_processed);
+          });
 	}).catch(err => console.log(err));
 	/*await rc.insertOne(data)
         .then(function (result) {
@@ -131,7 +131,7 @@ await fs.readdir(jsonFolder, (err, files) => {
             console.log("Reading: ", filePath);
             const id = file.split(".")[0]; // grabs the id from file name
             getResultsByDocument(parser.id, id, filePath, function(data){
-	    	main(data, connStr).catch(err => console.log(err));
+	    	main(data, connStr, jsonFolder, filePath, file).catch(err => console.log(err));
 	    });
         }
     });

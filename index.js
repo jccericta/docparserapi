@@ -103,7 +103,13 @@ await fs.readdir(fsFolder, (err, files) => {
                 const jsonPath = path.resolve(jsonFolder + result.id + ".json");
                 fs.writeFile(jsonPath, json, (err) => {
                     if (err) throw err;
-                        console.log('The file has been saved!');
+                    console.log('The file has been saved!');
+		    // Take the file and move it to the processed vob folder
+	            const vob_processed = path.resolve(fsFolder + 'processed_vobs/' + file);
+		    fs.rename(filePath, vob_processed, function(err) {
+			if(err) throw err;
+			console.log("Successfully moved " + filePath + " to" + vob_processed);
+		    });
                 });
             })
                 //recGetResultsByDocument(parser.id, result.id, file, jsonFolder);

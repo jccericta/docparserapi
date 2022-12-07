@@ -98,6 +98,15 @@ function isDir(path) {
     });
 }*/
 
+function getToday(){
+    var date = new Date();
+    var dd = String(date.getDate()).padStart(2, '0');
+    var mm = String(date.getMonth() + 1).padStart(2, '0'); //January is 0!
+    var yyyy = date.getFullYear();
+    const today = mm + '.' + dd + '.' + yyyy
+    return today;
+}
+
 async function main(cStr, fs) {
     console.log("Connecting to MongoDB: ", cStr);
     const client = await new mongodb.MongoClient(cStr,{useNewUrlParser: true, useUnifiedTopology: true});
@@ -107,26 +116,18 @@ async function main(cStr, fs) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Hansei");
         console.log("Collection: ", rc.collectionName);
-	/*await rc.insertOne(data)
-        .then(function (result) {
-            console.log(result);
-        }).catch(err => console.log(err));*/
 	const docs = await rc.find({}).toArray();
-	//docs.forEach(d => delete d.prepend);
 	jsonexport(docs,{verticalOutput: false}, function(err, csvData){
 	   if (err) throw err;
-	   //const csvDataArray = csvData.split(",");
-	   //console.log(csvData.split("\n"));
-	   /*fastcsv.write(csvDataArray, {headers: true}).on("finish", function(){
-	     console.log("Vob CSV is complete.");
-	   }).pipe(w);*/
-           fs.writeFile("vobs.csv", csvData, 'utf8', function(err){
+	   //console.log(csvData);
+	   const today = getToday();
+	   const file = "vobs."+today+".csv";
+           fs.writeFile(file, csvData, 'utf8', function(err){
 	      if(err) throw err;
-	      console.log("VOB csv is complete.");
+	      console.log("Finished Report: ", file);
 	   });
 	});
 	console.log("Documents found: ", await rc.count());
-	//console.log("Documents: ", docs);
 	await client.close();
     }
     catch(err) {
@@ -137,20 +138,4 @@ async function main(cStr, fs) {
         await client.close();
     }
 }
-//const ws = fs.createWriteStream("vobs.csv");
 main(connStr, fs);
-
-/*await fs.readdir(jsonFolder, (err, files) => {
-    files.forEach(file => {
-        const filePath = path.resolve(jsonFolder + "/" + file);
-        let isDirectory = isDir(filePath);
-        if(isDirectory === false) {
-            console.log("Reading: ", filePath);
-            const id = file.split(".")[0]; // grabs the id from file name
-            getResultsByDocument(parser.id, id, filePath, function(data){
-	    	main(data, connStr).catch(err => console.log(err));
-	    });
-        }
-    });
-});*/
-
