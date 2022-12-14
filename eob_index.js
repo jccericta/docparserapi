@@ -10,9 +10,9 @@ console.log(env);
 const apiKey = env.parsed.APIKEY
 console.log("Using API Key: ", apiKey);
 const client = new docParser.Client(apiKey); // api key
-const fsFolder = env.parsed.FSVOBFOLDER;
+const fsFolder = env.parsed.FSEOBFOLDER;
 console.log("@Subdirectory: ", fsFolder);
-const parserId = env.parsed.VOBPARSERID
+const parserId = env.parsed.EOBPARSERID
 const jsonFolder = fsFolder + 'json/';
 
 //const apiKey = "810fa30e4ff6186e3b886f0c7f37411dbd85a778";
@@ -90,45 +90,31 @@ await fs.readdir(fsFolder, (err, files) => {
     files.forEach(file => {
         const filePath = path.resolve(fsFolder + file);
         let isDirectory = isDir(filePath);
-        if(isDirectory === false && file !== "Test.pdf") {
-	    if(file.search("VOB") !== -1) {
-            console.log("Reading: ", filePath);
-            console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
-            //const guid = file.split(".", pattern);
-            client.uploadFileByPath(parser.id, filePath).then(function (result) {
-                console.log(result);
-                console.log("Processing: ", result.id);
-                const json = JSON.stringify({ id: result.id });
-                console.log("Saving to json document to: ", jsonFolder);
-                const jsonPath = path.resolve(jsonFolder + result.id + ".json");
-                fs.writeFile(jsonPath, json, (err) => {
-                    if (err) throw err;
-                    console.log('The file has been saved!');
-		    // Take the file and move it to the processed vob folder
-	            const vob_processed = path.resolve(fsFolder + 'processed_vobs/' + file);
-		    fs.rename(filePath, vob_processed, function(err) {
-			if(err) throw err;
-			console.log("Successfully moved " + filePath + " to" + vob_processed);
-		    });
+        if(isDirectory === false) {
+            if(file.search("EOB") !== -1) {
+                console.log("Reading: ", filePath);
+                console.log('Uploading file: ' + filePath + " to Parser: " + parser.id);
+                client.uploadFileByPath(parser.id, filePath).then(function (result) {
+                    console.log(result);
+                    console.log("Processing: ", result.id);
+                    const json = JSON.stringify({ id: result.id });
+                    console.log("Saving to json document to: ", jsonFolder);
+                    const jsonPath = path.resolve(jsonFolder + result.id + ".json");
+                    fs.writeFile(jsonPath, json, (err) => {
+                        if (err) throw err;
+                        console.log('The file has been saved!');
+                        // Take the file and move it to the processed vob folder
+                        const processed = path.resolve(fsFolder + 'processed_eobs/' + file);
+                            fs.rename(filePath, vob_processed, function(err) {
+                            if(err) throw err;
+                                console.log("Successfully moved " + filePath + " to" + processed);
+                            });
+                        });
+                })
+                .catch(function (err) {
+                    console.log(err)
                 });
-            })
-                //recGetResultsByDocument(parser.id, result.id, file, jsonFolder);
-                // client.getResultsByDocument(parser.id, result.id, {format: 'object'})
-                // .then(function (res) {
-                //     console.log(res);
-                //     const json = JSON.stringify(res);
-                //     fs.writeFile(jsonFolder+file + '.' +parser.id + '.json', json)
-                //     .then(function() {
-                //         // upload json documents to mongdb from here
-                //     });
-                // })
-                // .catch(function (err) {
-                //     console.log(err)
-                // });
-            .catch(function (err) {
-                console.log(err)
-            });
-	  }
+            }
         }
     });
 });
