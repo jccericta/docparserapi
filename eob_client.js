@@ -132,11 +132,12 @@ const configuration = new Configuration({
 });
 
 const openai = new OpenAIApi(configuration);
-const prompt = "1) Parse the data into this (if possible, a table): \n"; 
-const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim | Claim Number | Claim Date | Patient | Responsibility \n";
-const questions = "3) Then summarize the information by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe?\n";
-const summary = "4) Then parse the summary into (if possible, a JSON object): Services | Claims | Patients | Notes \n";
-const instructions = "\n" + prompt + parse + questions + summary; //add the data later
+const prompt = "1) Parse the data into this: \n"; 
+const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim Number | Claim Date | Patient | Responsibility \n";
+const questions = "3) Then summarize the parsed data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level % of your findings? \n";
+const summary = "4) Then parse the summary into Services | Claims | Patients | Notes. \n";
+const constraints = "5) Constraints: Only return the parsed summary with the confidence level of 100%. Cheapen yourself as much possible in regards to tokens spent. \n"; 
+const instructions = "\n" + prompt + parse + questions + summary + constraints; //add the data later
 
 async function summarizeData(d, o, i, cb) {
     const openaiPrompt = d[0].data + i; 
