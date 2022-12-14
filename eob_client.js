@@ -3,6 +3,7 @@ import fs from 'fs';
 import process from 'dotenv'
 import path from 'path';
 import mongodb from 'mongodb';
+import { Configuration, OpenAIApi } from 'openai';
 const __dirname = path.dirname('.');
 console.log("Working Directory: ", __dirname)
 const env = process.config({path: path.resolve('.env')});
@@ -124,6 +125,11 @@ async function main(data, cStr, j, fp, f) {
         await client.close();
     }
 }
+
+const configuration = new Configuration({
+    apiKey: env.parsed.OPENAIAPIKEY,
+    echo: true
+});
 
 const openai = new OpenAIApi(configuration);
 const prompt = "1) Parse the data into this (if possible, a table): \n"; 
