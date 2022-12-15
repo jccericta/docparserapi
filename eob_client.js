@@ -74,7 +74,7 @@ async function getResultsByDocument(parserId, docId, file, callback) {
     .then(function (res) {
         //console.log("Retrieved DocParser Data: ", res);
         const json = res;
-        summarizeData(json, openai, instructions, function(d){
+        summarizeData(json, openai, instructions, finalInstructions, function(d){
             const jsonStr = JSON.stringify(d);
             console.log("Saving to document: ", file)
             fs.writeFile(file, jsonStr, function(err){
@@ -137,26 +137,74 @@ const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Pati
 const questions = "3) Then summarize the parsed data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level % of your findings? \n";
 const summary = "4) Then parse the summary into Services | Claims | Patients | Notes. \n";
 const constraints = "5) Constraints: Only return the parsed summary with the confidence level of 100%. Cheapen yourself as much possible in regards to tokens spent. \n"; 
-const instructions = "\n" + prompt + parse + questions + summary + constraints; //add the data later
+const instructions = prompt + parse + questions + summary + constraints; //add the data later
+const finalInstructions = "Summarize the data and output as JSON, only return with 100% confidence level";
 
-async function summarizeData(d, o, i, cb) {
-    const openaiPrompt = d[0].data + i; 
-    const response = await o.createCompletion({
-        model: "text-davinci-003",
-        prompt: openaiPrompt,
-        temperature: 0.14,
-        max_tokens: 306,
-        top_p: 1,
-        best_of: 25,
-        frequency_penalty: 0.75,
-        presence_penalty: 0.31,
-    });
-    const findings = response.data;
-    const choices = findings.choices;
-    console.log(choices);
-    let data = d;
-    data[0]["summary"] = choices; // push summary into object
-    cb(data);
+async function summarizeData(d, o, i, fi, cb) {
+    const data = d;
+    let pgCount = data[0].page_count;
+    let divisor = Number(data[0].data.length) / Number(pgCount);
+    let regxStr = '/.{1, div}/g';
+    regxStr.replace('div', divisor);
+    regxStr = new RegExp(regxStr);
+    const dataArr = d[0].data.match(regxStr); // partition the unparsed data into equal lengths by page pgCount
+    const summaryArr = [];
+    console.log("Partitioning the data ...");
+    try {
+        for(var i = 0; i < dataArr.length; i++) {
+            const openaiPrompt = dataArr[i] + "\n" + i;
+            const response = await o.createCompletion({
+                model: "text-davinci-003",
+                prompt: openaiPrompt,
+                temperature: 0.14,
+                max_tokens: 306,
+                top_p: 1,
+                best_of: 25,
+                frequency_penalty: 0.75,
+                presence_penalty: 0.31,
+            });
+            const findings = response.data;
+            const choices = findings.choices;
+            console.log("Summarizing data: ", i)
+            console.log(choices);
+            data[0]["parsed_summary_"+i] = choices; // push partitioned summaries into object
+            summaryArr.push(data[0]["parsed_summary_"+i]);
+        }
+        await finalizeData(data, summaryArr, o, fi, function(d) {
+            cb(d);
+        });
+    }
+    catch(e) {
+        if(e) throw e;
+    }
+}
+
+async function finalizeData(d, sArr, o, fi) {
+    let str = sArr.join(" ").toString();
+    const openaiPrompt = str + fi;
+    console.log("Finalizing data ...");
+    try {
+        const response = await o.createCompletion({
+            model: "text-davinci-003",
+            prompt: openaiPrompt,
+            temperature: 0.14,
+            max_tokens: 306,
+            top_p: 1,
+            best_of: 25,
+            frequency_penalty: 0.75,
+            presence_penalty: 0.31,
+        });
+        const findings = response.data;
+        const choices = findings.choices;
+        console.log("Finalizing Data: ");
+        console.log(choices);
+        const data = d;
+        data[0]["final_data_summary"] = choices;
+        return data;
+    }
+    catch(e) {
+        if(e) throw e;
+    }
 }
 
 async function runMain() {
