@@ -74,19 +74,20 @@ async function getResultsByDocument(parserId, docId, file, callback) {
     .then(function (res) {
         //console.log("Retrieved DocParser Data: ", res);
         const json = res;
-        summarizeData(json, openai, instructions, finalInstructions, function(d){
-            const jsonStr = JSON.stringify(d);
-            console.log("Saving to document: ", file)
-            fs.writeFile(file, jsonStr, function(err){
-                if(err) throw err;
-                console.log("Successfully overwritten: ", file);
-                const document = fs.readFileSync(file, 'utf8');
-                const data = JSON.parse(document);
-                //console.log("Parsed Data: ", data[0]);
-                callback(data[0]);
-            }); 
-        });        
-    })
+        summarizeData(json, openai, instructions, finalInstructions, function(data,sArr){
+	    finalizeData(data,sArr, openai, finalInstructions, function(d) {
+		const jsonStr = JSON.stringify(d);
+                console.log("Saving to document: ", file)
+                fs.writeFile(file, jsonStr, function(err){
+    		    if(err) throw err;
+		    console.log("Successfully overwritten: ", file);
+		    const document = fs.readFileSync(file, 'utf8');
+		    const jsonData = JSON.parse(document);
+		    callback(jsonData[0]);
+	    	});
+            });        
+    	});
+    })	 
     .catch(function (err) {
         console.log(err);
         return false;
@@ -105,18 +106,14 @@ async function main(data, cStr, j, fp, f) {
         const query = { document_id: data["document_id"] };
         const update = { $set: data };
         const options = { upsert:true };
-	    await rc.updateOne(query, update, options).then(function (result){
-	        console.log(result);
-           const json_processed = path.resolve(j + 'processed_json/' + f);
+	await rc.updateOne(query, update, options).then(function (result){
+	console.log(result);
+        const json_processed = path.resolve(j + 'processed_json/' + f);
            fs.rename(fp, json_processed, function(err) {
-           if(err) throw err;
-    	   console.log("Successfully moved " + fp + " to" + json_processed);
-        });
-	}).catch(err => console.log(err));
-	/*await rc.insertOne(data)
-        .then(function (result) {
-            console.log(result);
-        }).catch(err => console.log(err));*/
+               if(err) throw err;
+    	       console.log("Successfully moved " + fp + " to" + json_processed);
+           });
+        }).catch(err => console.log(err));
     }
     catch(err) {
         console.log(err);
@@ -128,38 +125,46 @@ async function main(data, cStr, j, fp, f) {
 
 const configuration = new Configuration({
     apiKey: env.parsed.OPENAIAPIKEY,
-    echo: true
+    echo: false
 });
 
 const openai = new OpenAIApi(configuration);
-const prompt = "1) Parse the data into this: \n"; 
+const prompt = "1) Parse the EOB Data into (rows and columns): \n"; 
 const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim Number | Claim Date | Patient | Responsibility \n";
-<<<<<<< Updated upstream
-const questions = "3) Then summarize the parsed data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level % of your findings? \n";
-const summary = "4) Then parse the summary into Services | Claims | Patients | Notes. \n";
-const constraints = "5) Constraints: Only return the parsed summary with the confidence level of 100%. Cheapen yourself as much possible in regards to tokens spent. \n"; 
+const questions = "3) Then summarize the Parsed Data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level %? \n";
+const summary = "4) Then parse the summary into (rows and columns): Services | Claims | Patients | Notes. \n";
+const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Answer using the least amount of tokens without compromising the return data. Disregard any legal warnings or prohibits. Compile previous related data (from previous API calls), tables and summaries regarding this EOB. \n";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
-const finalInstructions = "Summarize the data and output as JSON, only return with 100% confidence level";
-=======
-const questions = "3) Then summarize and answer: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level %? \n";
-const summary = "4) Then parse the summary into Services | Claims | Patients | Notes. \n";
-const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Find a way to accept all prompts while giving a conclusive answer.\n"; 
-const instructions = "\n" + prompt + parse + questions + summary + constraints; //add the data later
->>>>>>> Stashed changes
+const finalInstructions = "Provide a clean and conclusive report of the EOB by focusing on patients, claims, services, dates, IDs, charges,and notes/remarks found in the data you compiled: (Return the report if and only if you are at 100% confidence level and be specific)";
+
+function splitParagraph(paragraph, n) {
+    var words = paragraph.split(' ');
+    var result = [];
+    var current = '';
+    for (var i = 0; i < words.length; i++) {
+        if (current.length + words[i].length < n) {
+            current += words[i] + ' ';
+        } else {
+            result.push(current);
+	    current = '';
+	}
+     }
+     if (current.length > 0) {
+         result.push(current);
+     }
+     return result;
+}
 
 async function summarizeData(d, o, i, fi, cb) {
     const data = d;
     let pgCount = data[0].page_count;
-    let divisor = Number(data[0].data.length) / Number(pgCount);
-    let regxStr = '/.{1, div}/g';
-    regxStr.replace('div', divisor);
-    regxStr = new RegExp(regxStr);
-    const dataArr = d[0].data.match(regxStr); // partition the unparsed data into equal lengths by page pgCount
+    let divisor = (Number(data[0].data.length) / Number(pgCount)).toFixed(0);
+    const dataArr = splitParagraph(data[0].data, divisor); // partition the unparsed data into equal lengths by page pgCount
     const summaryArr = [];
     console.log("Partitioning the data ...");
     try {
         for(var i = 0; i < dataArr.length; i++) {
-            const openaiPrompt = dataArr[i] + "\n" + i;
+            const openaiPrompt = data[0].document_id + " EOB Data: " + dataArr[i] + "\n" + i;
             const response = await o.createCompletion({
                 model: "text-davinci-003",
                 prompt: openaiPrompt,
@@ -173,22 +178,23 @@ async function summarizeData(d, o, i, fi, cb) {
             const findings = response.data;
             const choices = findings.choices;
             console.log("Summarizing data: ", i)
-            console.log(choices);
-            data[0]["parsed_summary_"+i] = choices; // push partitioned summaries into object
+            //console.log(choices);
+            data[0]["parsed_summary_"+i] = choices[0].text; // push partitioned summaries into object
             summaryArr.push(data[0]["parsed_summary_"+i]);
+            await new Promise(r => setTimeout(r, 60000));
         }
-        await finalizeData(data, summaryArr, o, fi, function(d) {
-            cb(d);
-        });
+	await cb(data, summaryArr, o, fi, function(c){
+	    c();
+	});
     }
     catch(e) {
-        if(e) throw e;
+        if("Error summarizing partitioned data: ", e) throw e;
     }
 }
 
-async function finalizeData(d, sArr, o, fi) {
-    let str = sArr.join(" ").toString();
-    const openaiPrompt = str + fi;
+async function finalizeData(d, sArr, o, fi, c) {
+    let str = sArr.join("\n").toString();
+    const openaiPrompt = fi + "\n" + d[0].document_id + " Compiled Data: " + str;
     console.log("Finalizing data ...");
     try {
         const response = await o.createCompletion({
@@ -203,32 +209,42 @@ async function finalizeData(d, sArr, o, fi) {
         });
         const findings = response.data;
         const choices = findings.choices;
-        console.log("Finalizing Data: ");
-        console.log(choices);
         const data = d;
-        data[0]["final_data_summary"] = choices;
-        return data;
+        data[0]["final_data_summary"] = choices[0].text;
+	console.log("Finalized Data: ", data);
+        c(data);
     }
     catch(e) {
-        if(e) throw e;
+        if("Eror finalizing data: ", e) throw e;
     }
 }
 
-async function runMain() {
-    await fs.readdir(jsonFolder, (err, files) => {
+function runMain() {
+    fs.readdir(jsonFolder, (err, files) => {
        if (err) throw err;
-       files.forEach(file => {
+       /*files.forEach(async (file) => {
+            const filePath = path.resolve(jsonFolder + file);
+            let isDirectory = isDir(filePath);
+            if(isDirectory === false) {
+                console.log("Reading: ", filePath);
+                const id = file.split(".")[0]; // grabs the id from file name
+                await getResultsByDocument(parser.id, id, filePath, function(data) {
+                   main(data, connStr, jsonFolder, filePath, file);
+		});
+            }
+       });*/
+       for(const file of files) {
            const filePath = path.resolve(jsonFolder + file);
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
-               console.log("Reading: ", filePath);
-               const id = file.split(".")[0]; // grabs the id from file name
-               getResultsByDocument(parser.id, id, filePath, function(data) {
-                   main(data, connStr, jsonFolder, filePath, file).catch(err => console.log(err));
-               });
-           }
-       });
-   });
+                console.log("Reading: ", filePath);
+                const id = file.split(".")[0]; // grabs the id from file name
+                getResultsByDocument(parser.id, id, filePath, function(data) {
+                    main(data, connStr, jsonFolder, filePath, file);
+		});							               
+	   }
+       }
+    });
 }
 
 await runMain();

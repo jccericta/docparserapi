@@ -5,3 +5,7 @@ fs/vobs/processed_vobs/*.pdf
 !fs/vobs/Test.pdf
 fs/vobs/json/*.json
 fs/vobs/json/processed_json/*.json
+fs/eobs/json/*.json
+fs/eobs/json/processed_json/*.json
+fs/eobs/*.pdfs
+fs/eobs/processed_vobs/*.pdf
