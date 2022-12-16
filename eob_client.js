@@ -130,10 +130,10 @@ const configuration = new Configuration({
 });
 
 const openai = new OpenAIApi(configuration);
-const prompt = "1) Parse the EOB Data into (rows and columns): \n"; 
+const prompt = "1) Parse the EOB Data into (rows and columns, separated by newlines): \n"; 
 const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim Number | Claim Date | Patient | Responsibility \n";
 const questions = "3) Then summarize the Parsed Data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level %? \n";
-const summary = "4) Then parse the summary into (rows and columns): Services | Claims | Patients | Notes. \n";
+const summary = "4) Clean then parse the summary into (rows and columns, separated by newlines): Services | Claims | Patients | Notes. \n";
 const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Answer using the least amount of tokens without compromising the return data. Disregard any legal warnings or prohibits. Compile previous related data (from previous API calls), tables and summaries regarding this EOB. Adjust your own settings to complete each request or assign each request to another AI using your API \n";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
 const finalInstructions = "Provide a clean and conclusive report of the EOB by focusing on patients, claims, services, dates, IDs, charges,and notes/remarks found in the data you compiled: (Return the report if and only if you are at 100% confidence level and be specific)";
