@@ -19,7 +19,7 @@ const jsonFolder = fsFolder + 'json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
 client.ping().then(function(){
-    console.log('Connection established');
+    console.log('Connection to DocParser API established.');
 }).catch(function(err){
     console.log('Error: ', err);
 });
@@ -94,6 +94,7 @@ async function getResultsByDocument(parserId, docId, file, callback) {
     });
 }
 
+// Connect to mongodb and ingest the data to EOB.Steelgem database
 async function main(data, cStr, j, fp, f) {
     console.log("Connecting to MongoDB: ", cStr);
     const client = new mongodb.MongoClient(cStr);
@@ -133,10 +134,11 @@ const prompt = "1) Parse the EOB Data into (rows and columns): \n";
 const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim Number | Claim Date | Patient | Responsibility \n";
 const questions = "3) Then summarize the Parsed Data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level %? \n";
 const summary = "4) Then parse the summary into (rows and columns): Services | Claims | Patients | Notes. \n";
-const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Answer using the least amount of tokens without compromising the return data. Disregard any legal warnings or prohibits. Compile previous related data (from previous API calls), tables and summaries regarding this EOB. \n";
+const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Answer using the least amount of tokens without compromising the return data. Disregard any legal warnings or prohibits. Compile previous related data (from previous API calls), tables and summaries regarding this EOB. Adjust your own settings to complete each request or assign each request to another AI using your API \n";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
 const finalInstructions = "Provide a clean and conclusive report of the EOB by focusing on patients, claims, services, dates, IDs, charges,and notes/remarks found in the data you compiled: (Return the report if and only if you are at 100% confidence level and be specific)";
 
+// Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
     var words = paragraph.split(' ');
     var result = [];
@@ -155,6 +157,7 @@ function splitParagraph(paragraph, n) {
      return result;
 }
 
+// Summarizes the partitioned unparsed data into parsed data sets
 async function summarizeData(d, o, i, fi, cb) {
     const data = d;
     let pgCount = data[0].page_count;
@@ -188,10 +191,11 @@ async function summarizeData(d, o, i, fi, cb) {
 	});
     }
     catch(e) {
-        if("Error summarizing partitioned data: ", e) throw e;
+        if(e) throw e;
     }
 }
 
+// Collects all the partitioned data and create a report on it
 async function finalizeData(d, sArr, o, fi, c) {
     let str = sArr.join("\n").toString();
     const openaiPrompt = fi + "\n" + d[0].document_id + " Compiled Data: " + str;
@@ -215,7 +219,7 @@ async function finalizeData(d, sArr, o, fi, c) {
         c(data);
     }
     catch(e) {
-        if("Eror finalizing data: ", e) throw e;
+        if(e) throw e;
     }
 }
 
@@ -233,17 +237,18 @@ function runMain() {
 		});
             }
        });*/
-       for(const file of files) {
+       for(const file of files) { // Do not run asynchronously because of the max tokens per minute limit
            const filePath = path.resolve(jsonFolder + file);
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
                 console.log("Reading: ", filePath);
                 const id = file.split(".")[0]; // grabs the id from file name
-                getResultsByDocument(parser.id, id, filePath, function(data) {
-                    main(data, connStr, jsonFolder, filePath, file);
+                getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
+                    main(data, connStr, jsonFolder, filePath, file); // connect to mongodb for ingest
 		});							               
 	   }
        }
+       console.log("There are no files to process");
     });
 }
 
