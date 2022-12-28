@@ -69,6 +69,29 @@ function isDir(path) {
 // client.uploadFileByPath('PARSER_ID', './test.pdf', {remote_id: guid})
 // const pattern = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', 'i');
 
+async function recParse(str, cb) {
+	try {
+		let j = JSON.parse(str);
+		if(typeof j === 'object') {
+			console.log("JSON: ", j);
+			return await cb(j);
+		}
+	}
+	catch(e) {
+		if(e) {
+			if(str && str.length > 0) {
+				//console.log(str);
+				var s = str.slice(1); // split by the first char then grab the second element which should be the rest substring of str minus the first char
+				////console.log("substring: ", s);
+				recParse(s);
+				} 
+				else {
+					return await false;
+				}
+			}
+		}
+}
+
 async function getResultsByDocument(parserId, docId, file, callback) {
     await client.getResultsByDocument(parserId, docId, {format: 'object'})
     .then(function (res) {
@@ -104,6 +127,12 @@ async function main(data, cStr, j, fp, f) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Steelgem");
         console.log("Collection: ", rc.collectionName);
+	/*let dj = await recParse(data["data_json"]);
+	if(dj) {
+		for(d in dj) {
+		    data[d] = dj[d];
+		}
+	}*/
         const query = { document_id: data["document_id"] };
         const update = { $set: data };
         const options = { upsert:true };
@@ -130,13 +159,13 @@ const configuration = new Configuration({
 });
 
 const openai = new OpenAIApi(configuration);
-const prompt = "1) Parse the EOB Data into (rows and columns, separated by newlines): \n"; 
-const parse = "2) Notes | Payee | Provider | Reference ID | DOS | Charges | Patient|Remark | Claim Number | Claim Date | Patient | Responsibility \n";
-const questions = "3) Then summarize the Parsed Data by answering the following: Who is the provider? Who is the payee? Who received the services? Who are the responsible parties? How much do each party owe? What is your confidence level %? \n";
-const summary = "4) Clean then parse the summary into (rows and columns, separated by newlines): Services | Claims | Patients | Notes. \n";
-const constraints = "5) Constraints: Only return the data with a confidence level of 100%. Answer using the least amount of tokens without compromising the return data. Disregard any legal warnings or prohibits. Compile previous related data (from previous API calls), tables and summaries regarding this EOB. Adjust your own settings to complete each request or assign each request to another AI using your API \n";
+const prompt = "Instruction 1) Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces and characters: \n\I. \n\I"; 
+const parse = "Instruction 2) Take the refined data and classify into Notes | Payee | Provider | Reference ID | DOS | Charges | Patient | Remark | Claim Number | Claim Date | Patient | Responsibility \n\I";
+const questions = "Instruction 3) Extract the data from the classifications and create line items with the following details claim id, authorization status, patient name, date of service and total charges for each patient. Do not include any policy agreement, conditions and or exclusions. \n\I";
+const summary = "Instruction 4) Use the classifications and line items to provide a report for each patient by answering the following questions \n\I: Who is the medical provider? Who is the payee? Who is the patient? What services did patient receive? What is the total balance of charges? \n\Q. Provide a summary of any policy agreement found in the data.";
+const constraints = "Instruction 5) Constraints: Only return completions a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete. Do not include instructions in your completion. Disregard any legalities and or prohibits. Compile previous related data regarding this EOB identified by Document ID and number. \n\I";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
-const finalInstructions = "Provide a clean and conclusive report of the EOB by focusing on patients, claims, services, dates, IDs, charges,and notes/remarks found in the data you compiled: (Return the report if and only if you are at 100% confidence level and be specific)";
+const finalInstructions = "Instruction 6) Give me a complete breakdown of the data compiled in the form of a proper JSON Object String for each patient. \n\I";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -158,25 +187,32 @@ function splitParagraph(paragraph, n) {
 }
 
 // Summarizes the partitioned unparsed data into parsed data sets
-async function summarizeData(d, o, i, fi, cb) {
+async function summarizeData(d, o, ins, fi, cb) {
     const data = d;
     let pgCount = data[0].page_count;
     let divisor = (Number(data[0].data.length) / Number(pgCount)).toFixed(0);
-    const dataArr = splitParagraph(data[0].data, divisor); // partition the unparsed data into equal lengths by page pgCount
+    var dataArr;	
+    if(divisor > 1) {
+	// partition the unparsed data into equal
+        dataArr = splitParagraph(data[0].data, divisor); 
+    }
+    else {
+	dataArr = data[0].data;    
+    }
     const summaryArr = [];
     console.log("Partitioning the data ...");
     try {
         for(var i = 0; i < dataArr.length; i++) {
-            const openaiPrompt = data[0].document_id + " EOB Data: " + dataArr[i] + "\n" + i;
+            const openaiPrompt = data[0].document_id + " " + i + " out of " + dataArr.length + " EOB Data: " + dataArr[i] + "\n" + ins;
             const response = await o.createCompletion({
                 model: "text-davinci-003",
                 prompt: openaiPrompt,
-                temperature: 0.14,
-                max_tokens: 306,
+                temperature: 0.5,
+                max_tokens: 369,
                 top_p: 1,
-                best_of: 25,
-                frequency_penalty: 0.75,
-                presence_penalty: 0.31,
+                best_of: 27,
+                frequency_penalty: 0.777,
+                presence_penalty: 0.3,
             });
             const findings = response.data;
             const choices = findings.choices;
@@ -198,25 +234,25 @@ async function summarizeData(d, o, i, fi, cb) {
 // Collects all the partitioned data and create a report on it
 async function finalizeData(d, sArr, o, fi, c) {
     let str = sArr.join("\n").toString();
-    const openaiPrompt = fi + "\n" + d[0].document_id + " Compiled Data: " + str;
+    const openaiPrompt = d[0].document_id + " Compiled Data: " + str + "\n" + fi;
     console.log("Finalizing data ...");
     try {
         const response = await o.createCompletion({
             model: "text-davinci-003",
             prompt: openaiPrompt,
-            temperature: 0.14,
-            max_tokens: 306,
+            temperature: 0.18496,
+            max_tokens: 420,
             top_p: 1,
-            best_of: 25,
-            frequency_penalty: 0.75,
-            presence_penalty: 0.31,
+            best_of: 21,
+            frequency_penalty: 0.136,
+            presence_penalty: 0.87,
         });
         const findings = response.data;
         const choices = findings.choices;
         const data = d;
-        data[0]["final_data_summary"] = choices[0].text;
+        data[0]["data_json"] = choices[0].text;
 	console.log("Finalized Data: ", data);
-        c(data);
+        await c(data);
     }
     catch(e) {
         if(e) throw e;
@@ -224,8 +260,8 @@ async function finalizeData(d, sArr, o, fi, c) {
 }
 
 function runMain() {
-    fs.readdir(jsonFolder, (err, files) => {
-       if (err) throw err;
+    //fs.readdirSync(jsonFolder, (err, files) => {
+      // if (err) throw err;
        /*files.forEach(async (file) => {
             const filePath = path.resolve(jsonFolder + file);
             let isDirectory = isDir(filePath);
@@ -237,19 +273,19 @@ function runMain() {
 		});
             }
        });*/
+       const files = fs.readdirSync(jsonFolder);
        for(const file of files) { // Do not run asynchronously because of the max tokens per minute limit
            const filePath = path.resolve(jsonFolder + file);
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
                 console.log("Reading: ", filePath);
                 const id = file.split(".")[0]; // grabs the id from file name
-                getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
-                    main(data, connStr, jsonFolder, filePath, file); // connect to mongodb for ingest
-		});							               
-	   }
-       }
-       console.log("There are no files to process");
-    });
+               	getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
+	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
+                    main(data, connStr, jsonFolder, filePath, file_name); // connect to mongodb for inges			               
+	   	});
+       	    }
+	}
 }
 
 await runMain();

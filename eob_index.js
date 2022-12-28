@@ -104,7 +104,8 @@ await fs.readdir(fsFolder, (err, files) => {
                         if (err) throw err;
                         console.log('The file has been saved!');
                         // Take the file and move it to the processed vob folder
-                        const processed = path.resolve(fsFolder + 'processed_eobs/' + file);
+			const file_name = file.replace(".pdf",  "." +result.id + ".pdf"); 
+                        const processed = path.resolve(fsFolder + 'processed_eobs/' + file_name);
                             fs.rename(filePath, processed, function(err) {
                             if(err) throw err;
                                 console.log("Successfully moved " + filePath + " to" + processed);
