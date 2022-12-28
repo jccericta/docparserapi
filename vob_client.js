@@ -129,9 +129,13 @@ await fs.readdir(jsonFolder, (err, files) => {
         let isDirectory = isDir(filePath);
         if(isDirectory === false) {
             console.log("Reading: ", filePath);
-            const id = file.split(".")[0]; // grabs the id from file name
+            //const id = file.split(".")[0]; // grabs the id from file name
+            const doc = fs.readFileSync(filePath, 'utf8');
+            const jData = JSON.parse(doc);
+            const id = jData["id"];
             getResultsByDocument(parser.id, id, filePath, function(data){
-	    	main(data, connStr, jsonFolder, filePath, file).catch(err => console.log(err));
+		const file_name = data.file_name.replace(".pdf", "." + id + ".json");
+	    	main(data, connStr, jsonFolder, filePath, file_name).catch(err => console.log(err));
 	    });
         }
     });

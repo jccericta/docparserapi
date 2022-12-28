@@ -99,7 +99,9 @@ await fs.readdir(fsFolder, (err, files) => {
                     console.log("Processing: ", result.id);
                     const json = JSON.stringify({ id: result.id });
                     console.log("Saving to json document to: ", jsonFolder);
-                    const jsonPath = path.resolve(jsonFolder + result.id + ".json");
+		    const jFile = file.replace(".pdf", "." + result.id + ".json");
+                    const jsonPath = path.resolve(jsonFolder + jFile);
+		    // filename, data, callback	
                     fs.writeFile(jsonPath, json, (err) => {
                         if (err) throw err;
                         console.log('The file has been saved!');

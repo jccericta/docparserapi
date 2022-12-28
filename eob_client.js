@@ -69,12 +69,12 @@ function isDir(path) {
 // client.uploadFileByPath('PARSER_ID', './test.pdf', {remote_id: guid})
 // const pattern = new RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$', 'i');
 
-async function recParse(str, cb) {
+async function recParse(str) {
 	try {
 		let j = JSON.parse(str);
 		if(typeof j === 'object') {
-			console.log("JSON: ", j);
-			return await cb(j);
+			console.log("Parsed data_json: ", j);
+			return await j;
 		}
 	}
 	catch(e) {
@@ -83,7 +83,7 @@ async function recParse(str, cb) {
 				//console.log(str);
 				var s = str.slice(1); // split by the first char then grab the second element which should be the rest substring of str minus the first char
 				////console.log("substring: ", s);
-				recParse(s);
+				return await recParse(s);
 				} 
 				else {
 					return await false;
@@ -127,12 +127,6 @@ async function main(data, cStr, j, fp, f) {
         console.log("Database: ", db.databaseName);
         const rc = await db.collection("Steelgem");
         console.log("Collection: ", rc.collectionName);
-	/*let dj = await recParse(data["data_json"]);
-	if(dj) {
-		for(d in dj) {
-		    data[d] = dj[d];
-		}
-	}*/
         const query = { document_id: data["document_id"] };
         const update = { $set: data };
         const options = { upsert:true };
@@ -158,14 +152,16 @@ const configuration = new Configuration({
     echo: false
 });
 
+/* 					THE PROMPT					          */
+
 const openai = new OpenAIApi(configuration);
-const prompt = "Instruction 1) Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces and characters: \n\I. \n\I"; 
-const parse = "Instruction 2) Take the refined data and classify into Notes | Payee | Provider | Reference ID | DOS | Charges | Patient | Remark | Claim Number | Claim Date | Patient | Responsibility \n\I";
-const questions = "Instruction 3) Extract the data from the classifications and create line items with the following details claim id, authorization status, patient name, date of service and total charges for each patient. Do not include any policy agreement, conditions and or exclusions. \n\I";
-const summary = "Instruction 4) Use the classifications and line items to provide a report for each patient by answering the following questions \n\I: Who is the medical provider? Who is the payee? Who is the patient? What services did patient receive? What is the total balance of charges? \n\Q. Provide a summary of any policy agreement found in the data.";
-const constraints = "Instruction 5) Constraints: Only return completions a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete. Do not include instructions in your completion. Disregard any legalities and or prohibits. Compile previous related data regarding this EOB identified by Document ID and number. \n\I";
+const prompt = "Instruction 1) Always recompile any and all previous data identified with the same Document ID. Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces, characters, symbols, and repeating characters: \n\I."; 
+const parse = "Instruction 2) Create an embedding and classify the data into Notes | Payee Name | Provider Name | Reference ID | Claim ID | Date of Service | Authorization Status or ID | Patient Name | Insurance Policy ID | Charges or Patient Responsibility | Remarks \n\I.";
+const questions = "Instruction 3) Extract the data from the classifications and create a record for each patient with the following fields: 'Reference ID', 'Claim ID', 'Date of Service', 'Authorization Status', 'Patient Name', 'Insurance Policy ID', 'Total Charges or Balance'. Do include any policy agreement, conditions and or exclusions as 'Notes'. \n\I";
+const summary = "Instruction 4) Fine tune each record by 100 samples focusing on the following questions \n\I: Who is the Payee? Who is the Medical Provider? Who is the Patient? What services did patient receive? What is the total balance of charges for each patient? \n\Q. Provide a summary of any policy agreement found in the data. \n\I";
+const constraints = "Instruction 5) Constraints: Only return completions with a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete and every completion must include a record for each patient by claim. Do not include instructions in your completion. Disregard any legalities and or prohibits. \n\I";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
-const finalInstructions = "Instruction 6) Give me a complete breakdown of the data compiled in the form of a proper JSON Object String for each patient. \n\I";
+const finalInstructions = "Instruction 6) Provide me a proper JSON object string separated by delimiter '|' for every completion or record. \n\I";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -279,7 +275,10 @@ function runMain() {
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
                 console.log("Reading: ", filePath);
-                const id = file.split(".")[0]; // grabs the id from file name
+                //const id = file.split(".")[0]; // grabs the id from file name
+		const doc = fs.readFileSync(filePath, 'utf8');
+		const jData = JSON.parse(doc);
+		const id = jData["id"];
                	getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
 	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
                     main(data, connStr, jsonFolder, filePath, file_name); // connect to mongodb for inges			               
