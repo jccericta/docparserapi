@@ -132,7 +132,14 @@ await fs.readdir(jsonFolder, (err, files) => {
             //const id = file.split(".")[0]; // grabs the id from file name
             const doc = fs.readFileSync(filePath, 'utf8');
             const jData = JSON.parse(doc);
-            const id = jData["id"];
+            //const id = jData["id"];
+            var id = '';
+            if(jData[0]) {
+               id = jData[0]["document_id"] ? jData[0]["document_id"] : jData["id"];
+            }
+            else{
+               id = jData["id"];
+            }
             getResultsByDocument(parser.id, id, filePath, function(data){
 		const file_name = data.file_name.replace(".pdf", "." + id + ".json");
 	    	main(data, connStr, jsonFolder, filePath, file_name).catch(err => console.log(err));

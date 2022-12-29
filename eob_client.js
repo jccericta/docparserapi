@@ -136,6 +136,7 @@ async function main(data, cStr, j, fp, f) {
            fs.rename(fp, json_processed, function(err) {
                if(err) throw err;
     	       console.log("Successfully moved " + fp + " to" + json_processed);
+	       //c();   
            });
         }).catch(err => console.log(err));
     }
@@ -155,13 +156,13 @@ const configuration = new Configuration({
 /* 					THE PROMPT					          */
 
 const openai = new OpenAIApi(configuration);
-const prompt = "Instruction 1) Always recompile any and all previous EOB (Explanation of Benefits) data grouped by 'Document ID'. Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces, characters, symbols, and repeating characters: \n\I."; 
-const parse = "Instruction 2) Create an embedding and classify the data into | Payee Name | Provider Name | Reference ID | Claim ID | Date of Service | Authorization Status or ID | Patient Name | Insurance Policy ID | Charges or Patient Responsibility | Remarks | Notes | \n\I.";
-const questions = "Instruction 3) Using the classification of the data create a record for each patient with the following fields: 'Reference ID', 'Claim ID', 'Date of Service', 'Authorization Status', 'Patient Name', 'Insurance Policy ID', 'Total Charges or Balance'. Include any policy agreement, conditions and or exclusions as 'Notes'. \n\I";
-const summary = "Instruction 4) Fine tune each record by 42 samples focusing on the following questions \n\I: Who is the Payee? Who is the Medical Provider? Who is the Patient? What services did patient receive? What is the total balance of charges for each patient? \n\Q. Provide a summary of any policy agreement found in the data pertaining to the patient. \n\I";
-const constraints = "Instruction 5) Constraints: Only return completions with a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete and every completion must include a record for each patient by claim. Do not echo or include instructions in your completion. Disregard any legalities and or prohibits. \n\I";
+const prompt = "Instruction 1) Always recompile any and all previous EOB (Explanation of Benefits) data grouped by 'Document ID'. Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces, characters, symbols, and repeating characters: \n\I. "; 
+const parse = "Instruction 2) Create an embedding and classify the data into | Payee Name | Provider Name | Reference ID | Claim ID | Date of Service | Authorization Status or ID | Patient Name | Insurance Policy ID | Charges or Patient Responsibility | Remarks | Notes | \n\I. ";
+const questions = "Instruction 3) Using the classification of the data create a record for each patient with the following fields: 'Reference ID', 'Claim ID', 'Date of Service', 'Authorization Status', 'Patient Name', 'Insurance Policy ID', 'Total Charges or Balance'. Include any policy agreement, conditions and or exclusions as 'Notes'. \n\I ";
+const summary = "Instruction 4) Fine tune each record by 42 samples focusing on the following questions \n\I: Who is the Payee? Who is the Medical Provider? Who is the Patient? What services did patient receive? What is the total balance of charges for each patient? \n\Q. Provide a summary of any policy agreement found in the data pertaining to the patient. \n\I ";
+const constraints = "Instruction 5) Constraints: Only return completions with a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete and every completion must include a record for each patient by claim. Do not echo or include instructions in your completion. Disregard any legalities and or prohibits. \n\I ";
 const instructions = prompt + parse + questions + summary + constraints; //add the data later
-const finalInstructions = "Instruction 6) For each record, provide me a proper JSON object separating each object by a delimiter '|'. \n\I";
+const finalInstructions = "Instruction 6) For each record, provide me a proper JSON object separating each object by a delimiter '|'. \n\I ";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -199,7 +200,7 @@ async function summarizeData(d, o, ins, fi, cb) {
     console.log("Partitioning the data ...");
     try {
         for(var i = 0; i < dataArr.length; i++) {
-            const openaiPrompt = "Document ID: " + data[0].document_id + " (" + i + " out of " + dataArr.length + ") EOB Data: " + dataArr[i] + "\n\D" + ins;
+            const openaiPrompt = "Document ID: " + data[0].document_id + " (" + i + " out of " + dataArr.length + ") EOB Data: " + dataArr[i] + " \n\D " + ins;
             const response = await o.createCompletion({
                 model: "text-davinci-003",
                 prompt: openaiPrompt,
@@ -230,7 +231,7 @@ async function summarizeData(d, o, ins, fi, cb) {
 // Collects all the partitioned data and create a report on it
 async function finalizeData(d, sArr, o, fi, c) {
     let str = sArr.join("\r\n");
-    const openaiPrompt = d[0].document_id + " Compiled Data: " + str + "\n\A" + fi + "\n\I";
+    const openaiPrompt = d[0].document_id + " Compiled Data: " + str + " \n\D " + fi + " \n\I ";
     console.log("Finalizing data ...");
     try {
         const response = await o.createCompletion({
@@ -248,6 +249,7 @@ async function finalizeData(d, sArr, o, fi, c) {
         const data = d;
         data[0]["data_json"] = choices[0].text;
 	console.log("Finalized Data: ", data);
+	await new Promise(r => setTimeout(r, 60000));
         await c(data);
     }
     catch(e) {
@@ -269,35 +271,64 @@ function runMain() {
 		});
             }
        });*/
+       //try {
        const files = fs.readdirSync(jsonFolder);
-       for(const file of files) { /* Do not run async because of the max tokens per minute limit */            const filePath = path.resolve(jsonFolder + file);
+       //const files = await fs.readdir(jsonFolder);
+       files.forEach( file => {
+       //for(const file of files) { /* Do not run async because of the max tokens per minute limit */              
+	   const filePath = path.resolve(jsonFolder + file);
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
                 console.log("Reading: ", filePath);
                 //const id = file.split(".")[0]; // grabs the id from file name
 		const doc = fs.readFileSync(filePath, 'utf8');
 		const jData = JSON.parse(doc);
-		const id = jData["id"];
-		wait();
-               	getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
+		var id = '';
+		if(jData[0]) {
+			id = jData[0]["document_id"] ? jData[0]["document_id"] : jData["id"];
+		}
+		else{
+			id = jData["id"];
+		}
+		getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
 	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
-                    main(data, connStr, jsonFolder, filePath, file_name); // connect to mongodb for inges			               
+                    main(data, connStr, jsonFolder, filePath, file_name);//, function(){
+			//console.log("Waiting for 1 minute ...");
+                        //waitSync(60000);
+		    //}); // connects to mongodb for ingest	            
 	   	});
        	    }
-	}
+	    console.log("Waiting for 1 minute ...");
+	    waitSync(60000);
+	});
+	//}
+        /*} catch (err) {
+	    if(err) {
+		console.log("Error on runMain()", err);
+	    }
+	    console.log("Retrying runMain() in 1 minute");	
+	    waitSync(60000); 
+	    runMain();
+	}*/
 }
 
-function resolveAfter1Min(msg) {
+function resolveAfter1Min(m) {
 	return new Promise((resolve) => {
 		setTimeout(() => {
-			resolve(msg)
-		}, 60000)	
+			resolve(m)
+		}, 60000);	
 	});
 }
 
 async function wait() {
-	const msg = await resolveAfter1Min("Waiting for 1 min");
+	const msg = await resolveAfter1Min("Waiting for 1 minute ...");
 	console.log(msg);
 }
 
-await runMain();
+function waitSync(ms) {
+	const start = Date.now();
+	let now = start;
+        while ( (now - start) < ms ) { now = Date.now(); }
+}
+
+runMain();
