@@ -194,7 +194,7 @@ async function summarizeData(d, o, ins, fi, cb) {
         dataArr = splitParagraph(data[0].data, divisor); 
     }
     else {
-	dataArr = data[0].data;    
+	dataArr = [data[0].data];    
     }
     const summaryArr = [];
     console.log("Partitioning the data ...");
