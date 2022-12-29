@@ -4,6 +4,7 @@ import process from 'dotenv'
 import path from 'path';
 import mongodb from 'mongodb';
 import { Configuration, OpenAIApi } from 'openai';
+import { OpenAI } from 'gpt-x';
 const __dirname = path.dirname('.');
 console.log("Working Directory: ", __dirname)
 const env = process.config({path: path.resolve('.env')});
@@ -17,6 +18,8 @@ console.log("@Subdirectory: ", fsFolder);
 const parserId = env.parsed.EOBPARSERID
 const jsonFolder = fsFolder + 'json/';
 const connStr = env.parsed.CONNECTION_STRING;
+
+const oai = new OpenAI(env.parsed.OPENAIAPIKEY, 'Steelgem');
 
 client.ping().then(function(){
     console.log('Connection to DocParser API established.');
@@ -90,6 +93,21 @@ async function recParse(str) {
 				}
 			}
 		}
+}
+
+async function getDataFromDoc(pid, did) {	
+	try {
+	    const data = await client.getResultsByDocument(pid, did, {format: 'object'});
+	    //console.log(data);
+	    return data;
+	}
+	catch (err) {
+	if (err) {
+	    	console.log("Error retrieving results from DocParser: ", err);	    
+	   }
+	    //await new Promise(r => setTimeout(r, 300000)); // wait 5 minute then try again
+	    //return await getDataFromDoc(pid, did);
+	}
 }
 
 async function getResultsByDocument(parserId, docId, file, callback) {
@@ -257,59 +275,46 @@ async function finalizeData(d, sArr, o, fi, c) {
     }
 }
 
-function runMain() {
-    //fs.readdirSync(jsonFolder, (err, files) => {
-      // if (err) throw err;
-       /*files.forEach(async (file) => {
-            const filePath = path.resolve(jsonFolder + file);
-            let isDirectory = isDir(filePath);
-            if(isDirectory === false) {
-                console.log("Reading: ", filePath);
-                const id = file.split(".")[0]; // grabs the id from file name
-                await getResultsByDocument(parser.id, id, filePath, function(data) {
-                   main(data, connStr, jsonFolder, filePath, file);
-		});
-            }
-       });*/
-       //try {
-       const files = fs.readdirSync(jsonFolder);
-       //const files = await fs.readdir(jsonFolder);
-       files.forEach( file => {
-       //for(const file of files) { /* Do not run async because of the max tokens per minute limit */              
-	   const filePath = path.resolve(jsonFolder + file);
-           let isDirectory = isDir(filePath);
-           if(isDirectory === false) {
-                console.log("Reading: ", filePath);
-                //const id = file.split(".")[0]; // grabs the id from file name
-		const doc = fs.readFileSync(filePath, 'utf8');
-		const jData = JSON.parse(doc);
-		var id = '';
-		if(jData[0]) {
-			id = jData[0]["document_id"] ? jData[0]["document_id"] : jData["id"];
-		}
-		else{
+async function runMain() {
+       try {
+           fs.readdir(jsonFolder, (err, files)  => {
+	   files.forEach(async file => {
+	       const filePath = path.resolve(jsonFolder + file);
+   	       let isDirectory = isDir(filePath);
+               if(isDirectory === false) {
+                   console.log("Reading: ", filePath);
+		   const doc = fs.readFileSync(filePath, 'utf8');
+		   const jData = JSON.parse(doc);
+		   var id = '';
+		   if(jData[0]) {
+		        id = jData[0]["document_id"] ? jData[0]["document_id"] : jData["id"];
+		   }
+		   else {
 			id = jData["id"];
-		}
-		getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
-	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
-                    main(data, connStr, jsonFolder, filePath, file_name);//, function(){
-			//console.log("Waiting for 1 minute ...");
-                        //waitSync(60000);
-		    //}); // connects to mongodb for ingest	            
-	   	});
-       	    }
-	    console.log("Waiting for 1 minute ...");
-	    waitSync(60000);
+		   }
+		   // get the data in the form of a json document    
+		   const jsonDocument = await getDataFromDoc(parser.id, id);
+		   const data = jsonDocument[0].data;    
+		   // partition the data into subsets of data
+		   let pgCount = jsonDocument[0].page_count;
+		   let divisor = (Number(data.length) / Number(pgCount)).toFixed(0);
+		   var dataArr;
+		   if(divisor > 1) {
+		   // partition the unparsed data into equal parts
+	               dataArr = splitParagraph(data[0].data, divisor);
+		   }
+	           else {
+        	       dataArr = [data];
+                   }
+       	    	}
+	   });
 	});
-	//}
-        /*} catch (err) {
+        } catch (err) {
 	    if(err) {
 		console.log("Error on runMain()", err);
 	    }
 	    console.log("Retrying runMain() in 1 minute");	
-	    waitSync(60000); 
-	    runMain();
-	}*/
+	}
 }
 
 function resolveAfter1Min(m) {
