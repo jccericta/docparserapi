@@ -277,8 +277,9 @@ async function finalizeData(d, sArr, o, fi, c) {
 
 async function runMain() {
        try {
-           fs.readdir(jsonFolder, (err, files)  => {
-	   files.forEach(async file => {
+	   const jsonDocs = [];
+           fs.readdir(jsonFolder, async (err, files)  => {
+	   await files.forEach(async file => {
 	       const filePath = path.resolve(jsonFolder + file);
    	       let isDirectory = isDir(filePath);
                if(isDirectory === false) {
@@ -294,18 +295,9 @@ async function runMain() {
 		   }
 		   // get the data in the form of a json document    
 		   const jsonDocument = await getDataFromDoc(parser.id, id);
-		   const data = jsonDocument[0].data;    
-		   // partition the data into subsets of data
-		   let pgCount = jsonDocument[0].page_count;
-		   let divisor = (Number(data.length) / Number(pgCount)).toFixed(0);
-		   var dataArr;
-		   if(divisor > 1) {
-		   // partition the unparsed data into equal parts
-	               dataArr = splitParagraph(data[0].data, divisor);
-		   }
-	           else {
-        	       dataArr = [data];
-                   }
+		   //console.log(jsonDocument);    
+		   jsonDocs.push(jsonDocument);
+		   processDocs(jsonDocs);    
        	    	}
 	   });
 	});
@@ -313,7 +305,6 @@ async function runMain() {
 	    if(err) {
 		console.log("Error on runMain()", err);
 	    }
-	    console.log("Retrying runMain() in 1 minute");	
 	}
 }
 
@@ -334,6 +325,107 @@ function waitSync(ms) {
 	const start = Date.now();
 	let now = start;
         while ( (now - start) < ms ) { now = Date.now(); }
+}
+
+async function classifyData(jdoc, dataArr) {
+	const classify =  "<instruction> \n" + "\n" + "0) Always recompile, collect and combine any related data grouped by Document ID. Store into memory and cache all the data before following the instructions provided: \n" + '\n';
+		"1) Create an embedding of the chunk of data and classify the chunks of data as an Explanation of Benefits, a Remittance, a Reimbursement and or a Policy. \n" + "\n" + "2) Place key values such as document ID, insured's name, insured’s ID number, provider name, provider id number and etc into classifications. Return only the classifications. \n" + '\n' + "3) Compile all previous classifications and or completions into one and send it to AI text-ada-001 for data parsing. \n" + "\n"
+	+ "</instruction>";
+	const classifications = [];
+	for(var i = 0; i < dataArr.length; i++) {
+		const openaiPrompt = "Document ID: " + jdoc[0].document_id
+			+ " (" + i + " out of " + (dataArr.length - 1) + ") <data>: \n" + "\n"
+			+ dataArr[i] + "\n" + "\n" + "</data> \n" + "\n"  + classify;
+		const response = await openai.createCompletion({
+		model: "text-curie-001",
+		prompt: openaiPrompt,
+		temperature: 0.18496,
+		max_tokens: 327,
+		top_p: 1,
+		best_of: 27,
+		frequency_penalty: 0.87,
+		presence_penalty: 0.327,
+		});
+	        const findings = response.data;
+	        const choices = findings.choices;
+	        //console.log("Summarizing data: ", i)
+	        console.log(choices);
+		classifications.push(choices[0].text);
+	        jdoc[0]["classifications"] = classifications;
+	        console.log("Waiting for 30 secs ...");
+                await new Promise(r => setTimeout(r, 30000));
+	}
+	let data = jdoc[0]["classification"];
+	console.log(data.join("\n"));
+}
+
+async function cleanData(jdoc, dataArr) {
+        const instructions = "<instructions>: \n" + '\n' + "0) Always recompile, collect and combine any related data grouped by Document ID. Store into memory and cache all the data before following the instructions provided: \n" + '\n'
+		'1) Clean, edit and refine the data by stripping off leading spaces, characters, symbols, and repeating characters. Fix misspellings and grammatically correct sentences. \n' +
+		      '\n' +
+		      "2) Identify key values such as document ID, insured's name, insured’s ID number, provider name, provider id number and etc. Take note of policies and or remarks. Return only the clean, edited, and refined data. \n" + '\n' + "3) Compile all previous completions into one and send it to AI text-curie-001 for complex classification. \n" + "\n"+  "</instructions>"; /* +
+		      "3) Create an embedding of the data and classify the data as an Explanation of Benefits, a Remittance, and or a Reimbursement. \n" +
+		      '\n' +
+		      '4) Parse the EOB (Explanation of Benefits) data into meaningful units that can be stored in a database table for further analysis. \n' +
+		      '\n' +
+		      '5) Validate all parsed data for accuracy and consistency. \n' + "\n <end of instructions> \n" + "\n";*/
+	const completions = [];
+	for(var i = 0; i < dataArr.length; i++) {
+		const openaiPrompt = "Document ID: " + jdoc[0].document_id 
+			+ " (" + i + " out of " + (dataArr.length - 1) + ") <data>: \n" + "\n"
+			+ dataArr[i] + "\n" + "\n" + "</data> \n" + "\n"  + prompt;
+	            const response = await openai.createCompletion({
+		           model: "text-davinci-001",
+		           prompt: openaiPrompt,
+		           temperature: 0.777,
+		           max_tokens: 327,
+		           top_p: 1,
+		           best_of: 27,
+		           frequency_penalty: 0.87,
+		           presence_penalty: 0.327,
+		    });
+	            const findings = response.data;
+	            const choices = findings.choices;
+	            //console.log("Summarizing data: ", i)
+	            console.log(choices);
+		    completions.push(choices[0].text);	
+	            //jdoc[0]["clean_data"] = completions;
+		    console.log("Waiting for 30 secs ...");
+                    await new Promise(r => setTimeout(r, 30000));
+	}
+	//let data = jdoc[0]["clean_data"];
+	let data = completions.join("\n");
+	jdoc[0]["clean_data"] = data;
+	let pgCount = jdoc[0].page_count;
+	let divisor = (Number(data.length) / Number(pgCount)).toFixed(0);
+	var dtArr;
+	if(divisor > 1) {
+	//partition the unparsed data into equal parts
+	     dtArr = splitParagraph(data, divisor);
+	}
+	else {
+		dtArr = [data];
+	}
+	classifyData(jdoc, dtArr); 
+}
+
+function processDocs(jdocs) {
+	//console.log(jdocs);
+	for(var i = 0; i < jdocs.length; i++) {
+	    const data = jdocs[i][0].data;
+	    // partition the data into subsets of data
+            let pgCount = jdocs[i][0].page_count;
+            let divisor = (Number(data.length) / Number(pgCount)).toFixed(0);
+	    var dtArr;
+	    if(divisor > 1) {
+	       //partition the unparsed data into equal parts
+	       dtArr = splitParagraph(data, divisor);
+	    }
+	    else {
+	       dtArr = [data];
+	    }
+	    cleanData(jdocs[i], dtArr);
+	}
 }
 
 runMain();
