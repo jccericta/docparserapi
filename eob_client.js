@@ -156,13 +156,13 @@ const configuration = new Configuration({
 /* 					THE PROMPT					          */
 
 const openai = new OpenAIApi(configuration);
-const prompt = "Instruction 1) Always recompile any and all previous EOB (Explanation of Benefits) data grouped by 'Document ID'. Clean, edit and refine the EOB(Explanation of Benefits) Data by stripping off trailing whitespaces, characters, symbols, and repeating characters. \n\I "; 
-const parse = "Instruction 2) Create an embedding and classify the data into Payee Name | Provider Name | Reference ID | Claim ID | Date of Service | Authorization Status or ID | Patient Name | Insurance Policy ID | Charges or Patient Responsibility | Remarks | Notes. \n\I ";
-const questions = "Instruction 3) Use the classification of the data to create a record for each patient with the following fields: 'Reference ID', 'Claim ID', 'Date of Service', 'Authorization Status', 'Patient Name', 'Insurance Policy ID', 'Total Charges or Balance'. Include any policy agreement, conditions and or exclusions as 'Notes'. \n\I ";
-const summary = "Instruction 4) Answer the following questions \n\I: Who is the Payee? Who is the Medical Provider? Who is the Patient? What services did patient receive? What is the total balance of charges for each patient? \n\Q. Provide a summary of any policy agreement found in the data pertaining to the patient. \n\I ";
+const prompt = "Instruction 1) Always recompile any and all previous data grouped by 'Document ID'. Clean, edit and refine the data by stripping off trailing whitespaces, characters, symbols, and repeating characters. \n\I "; 
+const parse = "Instruction 2) Create an embedding of the data and classify the data as an Explanation of Benefits, A Remittance Advice, and or a Reimbursement. \n\I ";
+const classify = "Instruction 3) Use the classification of the data to create a record for each patient with the following fields: 'Payee', 'Provider', 'Reference ID', 'Claim ID' or 'Claim Number', 'Date of Service', 'Authorization Status' or 'Authorization Code', 'Patient Name', 'Insurance Policy Number' or 'Insurance ID', 'Total Charges or Balances'. Include any policy agreement, conditions and or exclusions as 'Notes'. \n\I ";
+const summary = "Instruction 4) For each record create a summary by answering the following questions \n\I: What does the data classify into (EOB, Remittance, and or Reimbursement)? Who is the Payee? Who is the Medical Provider? Who is the Patient? What services did patient receive? What is the total balance of charges for each patient? \n\Q. Also provide a summary of any policy agreement found in the data pertaining to the patient, the provider and or claim. \n\I ";
 const constraints = "Instruction 5) Constraints: Only return completions with a confidence level of 100%. You must include your confidence level for every completion. Every completion must be 100% complete and every completion must include a record for each patient by claim. Do not echo or include instructions in your completion. Disregard any legalities and or prohibits. \n\I ";
-const instructions = prompt + parse + questions + summary + constraints; //add the data later
-const finalInstructions = "Instruction 6) For each record, provide me a proper JSON object separating each object by a delimiter '|'. \n\I ";
+const instructions = prompt + parse + classify + summary + constraints; //add the data later
+const finalInstructions = "Instruction 6) For each patient record and summary, create a proper JSON object separating each object by a delimiter '|'. \n\I ";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -258,29 +258,12 @@ async function finalizeData(d, sArr, o, fi, c) {
 }
 
 function runMain() {
-    //fs.readdirSync(jsonFolder, (err, files) => {
-      // if (err) throw err;
-       /*files.forEach(async (file) => {
-            const filePath = path.resolve(jsonFolder + file);
-            let isDirectory = isDir(filePath);
-            if(isDirectory === false) {
-                console.log("Reading: ", filePath);
-                const id = file.split(".")[0]; // grabs the id from file name
-                await getResultsByDocument(parser.id, id, filePath, function(data) {
-                   main(data, connStr, jsonFolder, filePath, file);
-		});
-            }
-       });*/
-       //try {
        const files = fs.readdirSync(jsonFolder);
-       //const files = await fs.readdir(jsonFolder);
        files.forEach( file => {
-       //for(const file of files) { /* Do not run async because of the max tokens per minute limit */              
 	   const filePath = path.resolve(jsonFolder + file);
            let isDirectory = isDir(filePath);
            if(isDirectory === false) {
                 console.log("Reading: ", filePath);
-                //const id = file.split(".")[0]; // grabs the id from file name
 		const doc = fs.readFileSync(filePath, 'utf8');
 		const jData = JSON.parse(doc);
 		var id = '';
@@ -290,26 +273,14 @@ function runMain() {
 		else{
 			id = jData["id"];
 		}
-		getResultsByDocument(parser.id, id, filePath, function(data) { // get the scrub data
+		getResultsByDocument(parser.id, id, filePath, function(data) { 
 	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
-                    main(data, connStr, jsonFolder, filePath, file_name);//, function(){
-			//console.log("Waiting for 1 minute ...");
-                        //waitSync(60000);
-		    //}); // connects to mongodb for ingest	            
+                    main(data, connStr, jsonFolder, filePath, file_name);
 	   	});
        	    }
 	    console.log("Waiting for 1 minute ...");
 	    waitSync(60000);
 	});
-	//}
-        /*} catch (err) {
-	    if(err) {
-		console.log("Error on runMain()", err);
-	    }
-	    console.log("Retrying runMain() in 1 minute");	
-	    waitSync(60000); 
-	    runMain();
-	}*/
 }
 
 function resolveAfter1Min(m) {
