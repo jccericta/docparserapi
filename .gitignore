@@ -7,6 +7,6 @@ fs/vobs/json/*.json
 fs/vobs/json/processed_json/*.json
 fs/eobs/json/*.json
 fs/eobs/json/processed_json/*.json
-fs/eobs/*.pdfs
+fs/eobs/*.pdf
 fs/eobs/processed_vobs/*.pdf
 fs/eobs/processed_eobs/*.pdf

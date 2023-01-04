@@ -155,19 +155,19 @@ const configuration = new Configuration({
 
 const openai = new OpenAIApi(configuration);
 
-const prompt = "<instructions> \n\n Instruction 1) Create a log file: '<logFileName>', cache and save into your memory the log file: '<logFileName>' for referencing. Read the following data vertically top to bottom, left to right as if it was an invoice. Clean, edit and refine the data by stripping off trailing whitespaces, characters, symbols, and repeating characters. Fix all misspellings and grammatically correct sentences. Take note of patterns such as Claim ID, Patient ID, Date of Service, Insurance Policy Number and etc. Cache the result and save into your memory the refined data under 'Refined Data'. Create a reference pointer to the 'Refined Data' and log it in the log file for further referencing. Do this for all subsequent data in <data> grouped by Document ID. \n\ "
+const prompt = "<Instructions> \n Instruction 1) Clear your cache, your memory and create a log file: '<logFileName>', cache and save into your memory the log file: '<logFileName>' for referencing. Read the following data marked as '<Data>' ending with '</Data>' vertically top to bottom, left to right as if it was an invoice. Clean, edit and refine the data by stripping off trailing whitespaces, characters, symbols, and repeating characters. Fix all misspellings and grammatically correct sentences. Take note of patterns such as Claim ID, Patient ID, Date of Service, Insurance Policy Number and etc. Log, cache and save the refined data into your memory under '<Refined Data>' ending with '</Refined Data>'. Create a reference to the '<Refined Data>' and log it in the log file for further referencing. Do this for all subsequent data in <data> grouped by Document ID. \n\ "
 
-const parse = "Instruction 2) Use the 'Refined Data' reference pointer found in the log file: <logFileName> and create an embedding of the 'Refined Data' while classifying each chunk of data as an 'Explanation of Benefits', A 'Remittance' or 'Remittance Advice', a 'Reimbursement', a 'Policy', a 'Claim' or General Information. Cache the embedding and classifications of the data under 'Classifications' and save into your memory to help with further analysis. Then create a reference pointer to the 'Classifications' and log it into the log file: <logFileName> for reference. \n ";
+const parse = "Instruction 2) Use the '<Refined Data>' reference found in the log file: <logFileName> to create an embedding of the '<Refined Data>' and classify each chunk of data as an 'Explanation of Benefits', A 'Remittance' or 'Remittance Advice', a 'Reimbursement', a 'Policy', a 'Claim' or General Information. Log and cache the embedding and classifications of the data under '<Classifications>' ending with '</Classifications>' and save into your memory to help with further analysis. Then create a reference to the '<Classifications>' and log it into the log file: <logFileName> for future reference. \n ";
 
-const classify = "Instruction 3) Use the 'Classifications' and 'Refined Data' reference pointers in log file: <logFileName> to help you analyze the 'Refined Data' found in cache and or your memory to parse the data. Create a record suitable for a tabular database for each patient. The following fields must be included: 'Payee', 'Provider', 'Reference ID', 'Claim ID' or 'Claim Number', 'Date of Service', 'Authorization Status' or 'Authorization Code', 'Patient Name', 'Insurance Policy Number' or 'Insurance ID', 'Total Charges or Balances', 'Checking Account or Check Number', and 'Notes'. Number, label and cache each record under 'Records' and save into memory. Then create a reference pointer for each record in 'Records' and log it into the log file: <logFileName>. \n ";
+const classify = "Instruction 3) Use the '<Classifications>' and '<Refined Data>' references in the log file: <logFileName> to help you parse the '<Refined Data>' into a record suitable for a tabular database. Create a record for each patient and using the following fields (must be included): 'Payee', 'Provider', 'Reference ID', 'Claim ID' or 'Claim Number', 'Date of Service', 'Authorization Status' or 'Authorization Code', 'Patient Name', 'Insurance Policy Number' or 'Insurance ID', 'Total Charges or Balances', 'Checking Account or Check Number', and 'Notes'. Log and cache each record under '<Records>' ending with </Records> and save into your memory. Then create a reference for each record in '<Records>' and log it into the log file: <logFileName>. \n ";
 
-const summary = "Instruction 4) Validate each record in 'Records' in cache and in your memory. Use all the the data and saved results found in cache and in memory using the reference pointers found in the log file: <logFileName> for validation and reference. Each record must have a confidence level of 100%. You must include the confidence level for every record. Be consistent with the structure of the record and focus on accuracy above all else. \n"; 
+const summary = "Instruction 4) Validate each record in 'Records'. Use all the the data and saved results found in the log file: <logFileName>, cache and in your memory using the reference pointers found in the log file: <logFileName> for validation and reference. Each record must have a confidence level of 100%. You must include the confidence level for every record. Be consistent with the structure of the record and focus on accuracy above all else. Return the validated record as your completion. Do not regurgitate the '<Instructions>'. \n"; 
 
-const constraints = "Instruction 5) Ensure that the data and information stored in cache and in memory are retrievable outside the scope of the request call by using the log file: <logFileName> to find references to the data found in cache or your memory. Each completion must be 100% complete and does not regurgitate the same type of information or the same information. Cache and save into your memory all completions under 'Completions' \n\n </instructions>. \n\n <data> \n\n ";
+const constraints = "Instruction 5) Ensure that the data and information stored in the log file: <logFileName>, cache and in your memory are retrievable outside the scope of the API request by using the log file: <logFileName> to find references to the data. Ensure that each completion is 100% complete. Log, cache and save into your memory all your completions under '<Completions>' ending with </Completions>. \n </Instructions>. \n\n <Data> \n ";
 
 const instructions = prompt + parse + classify + summary + constraints; //add the data later
 
-const finalInstructions = "</data> \n\n <instructions> \n\n Final Instruction) Retrieve the log file: '<logFileName>' and use the reference pointers to find all the data in cache and in memory. Find all the records in 'Records' and turn each record into a JSON object with the corresponding record fields as fields. Be consistent with the structuring of the JSON object. Return only the JSON object as your 'final completion'. If no records or reference pointers exists return the log file: <logFileName>. If the log file: <logFileName> does not exists return an error message and provide feedback. \n\n </instructions> \n\n ";
+const finalInstructions = "<Instructions> \n Final Instruction) Retrieve the log file: '<logFileName>' and use the references to find all the data saved in the log file: <logFileName>, cache and in your memory. Find all the completions in '<Completions>' and turn each completion into a JSON object. Be consistent with the structuring of the JSON object. Return only the JSON object as your 'final completion'. \n </Instructions> \n\n ";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -191,9 +191,9 @@ function splitParagraph(paragraph, n) {
 // Summarizes the partitioned unparsed data into parsed data sets
 async function summarizeData(d, o, ins, fi, cb) {
     const data = d;
-    console.log("Raw Data", data[0].data);
-    let constructs = ins.replaceAll("<logFileName>", data[0].document_id);
-    console.log("The construct: ", constructs);
+    //console.log("Raw Data", data[0].data);
+    let constructs = ins.replaceAll("<logFileName>", data[0].file_name + "." + data[0].document_id);
+    //console.log("The construct: ", constructs);
     let pgCount = data[0].page_count;
     let divisor = (Number(data[0].data.length) / Number(pgCount)).toFixed(0);
     var dataArr = [];
@@ -206,10 +206,11 @@ async function summarizeData(d, o, ins, fi, cb) {
     }
     const summaryArr = [];
     dataArr[0] = constructs + dataArr[0];
-    console.log("Partitioning the data ...", dataArr);
+    dataArr[dataArr.length -1 ] = dataArr[dataArr.length - 1] + "\n </Data> \n\n";
+    console.log("Partitioning the data ...");
     try {    
         for(var i = 0; i < dataArr.length; i++) {
-            const openaiPrompt = "(Document ID: " + data[0].document_id + " - " + i + " out of " + (dataArr.length-1) + " Data Chunk) \n" + dataArr[i] + " \n ";
+            const openaiPrompt = "(Document ID: " + data[0].document_id + " Data Chunk) \n" + dataArr[i] + " \n ";
             const response = await o.createCompletion({
                 model: "text-davinci-003",
                 prompt: openaiPrompt,
@@ -227,7 +228,7 @@ async function summarizeData(d, o, ins, fi, cb) {
             let dt = choices[0].text;
             data[0]["data_"+i] = dt; // push partitioned summaries into object
             summaryArr.push(dt);
-            console.log("Waiting 30 seconds before next partition ...");
+            console.log("Waiting 30 seconds before proceeding ...");
             await new Promise(r => setTimeout(r, 30000));
         }
 	await cb(data, summaryArr, o, fi, function(c){
@@ -245,7 +246,7 @@ async function finalizeData(d, sArr, o, fi, c) {
     let str = sArr.join("\n");
     let finalConstruct = fi.replaceAll("<logFileName>", data[0].document_id);
     const openaiPrompt = "<data> \n\n " + str + finalConstruct;
-    console.log("The final construct", finalConstruct);
+    //console.log("The final construct", finalConstruct);
     console.log("Finalizing data ...");
     try {
         const response = await o.createCompletion({
@@ -263,6 +264,7 @@ async function finalizeData(d, sArr, o, fi, c) {
 	console.log(choices);
 	data[0]["data_report"] = str;
         data[0]["data_json"] = choices[0].text;
+	data[0]["data_json"] = recParse(data[0]["data_json"]) ? recParse(data[0]["data_json"]) : data[0]["data_json"]);
 	console.log("Finalized Data: ", data);
         await c(data);
     }
