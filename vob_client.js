@@ -95,9 +95,9 @@ async function main(data, cStr, j, fp, f) {
     const client = new mongodb.MongoClient(cStr);
     try {
         await client.connect();
-        const db = await client.db("VOB");
+        const db = await client.db("Steelgem");
         console.log("Database: ", db.databaseName);
-        const rc = await db.collection("Hansei");
+        const rc = await db.collection("VOB");
         console.log("Collection: ", rc.collectionName);
 	const query = { document_id: data["document_id"] };
 	const update = { $set: data };
