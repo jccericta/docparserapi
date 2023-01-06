@@ -151,23 +151,12 @@ const configuration = new Configuration({
     echo: false
 });
 
-/* 					THE PROMPT					          */
-
 const openai = new OpenAIApi(configuration);
 
-const prompt = "<Instructions> \n Instruction 1) Clear your cache, your memory and create a log file: '<logFileName>', cache and save into your memory the log file: '<logFileName>' for referencing. Read the following data marked as '<Data>' ending with '</Data>' vertically top to bottom, left to right as if it was an invoice. Clean, edit and refine the data by stripping off trailing whitespaces, repeating characters, symbols or characters. Fix all misspellings and grammatically correct sentences. Disregard and omit any policies, legalities, prohibits and disclosures in the refining of the data. Emphasize on refining the data for key value pairings, claim information, service line items, IDs and or codes. Log, cache and save the refined data into your memory under '<Refined Data>' ending with '</Refined Data>'. Add all instructions to your settings option as instructions. Add all refined data to your setting option as refined_data. Create a reference to the '<Refined Data>' and log it in the log file for further referencing. Do this for all subsequent data in <data> grouped by Document ID. \n\ "
+/* 					THE PROMPT					          */
+const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6) :\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text.\n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record should have the following fields: claim number or id, authorization code, status and or number, insurance policy id or member id, dates of service, charges, totals or balances, patient name and or patient id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize the data by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response</instructions>\n\n";
 
-const parse = "Instruction 2) Use the '<Refined Data>' reference found in the log file: <logFileName> to create an embedding of the '<Refined Data>' and classify each chunk of data as an 'Explanation of Benefits', A 'Remittance' or 'Remittance Advice', a 'Reimbursement', a 'Policy', a 'Claim' or General Information. Log and cache the embedding and classifications of the data under '<Classifications>' ending with '</Classifications>' and save into your memory to help with further analysis. Then create a reference to the '<Classifications>' and log it into the log file: <logFileName> for future reference. Use semantic search to find claim IDs, authorization codes, patient names, charges in dollar amounts, dates of service and etc. Add all embeddings to your setting options as embeddings and add all classifications to your setting options as classifications. \n ";
-
-const classify = "Instruction 3) Use the '<Classifications>' and '<Refined Data>' references in the log file: <logFileName> to help you parse the '<Refined Data>' into a record suitable for a tabular database. Create a record for each patient and using the following fields (must be included): 'Payee', 'Provider', 'Reference ID', 'Claim ID' or 'Claim Number', 'Date of Service', 'Authorization Status' or 'Authorization Code', 'Patient Name', 'Insurance Policy Number' or 'Insurance ID', 'Total Charges or Balances', 'Checking Account or Check Number', and 'Notes'. Log and cache each record under '<Records>' ending with </Records> and save into your memory. Then create a reference for each record in '<Records>' and log it into the log file: <logFileName>. \n ";
-
-const summary = "Instruction 4) Validate each record in 'Records'. Use all the the data and saved results found in the log file: <logFileName>, cache and in your memory using the reference pointers found in the log file: <logFileName> for validation and reference. Each record must have a confidence level of 100%. You must include the confidence level for every record. Be consistent with the structure of the record and focus on accuracy above all else. Add all records to your setting options as records. Return the validated record as your completion. For each completion only return either records and classifications, short brief summaries of policies, or the refinement of the data placing emphasis on returning records if any. Lastly  Do not regurgitate the '<Instructions>'. \n"; 
-
-const constraints = "Instruction 5) Ensure that the data and information stored in the log file: <logFileName>, cache and in your memory are retrievable outside the scope of the API request by using the log file: <logFileName> to find references to the data. Ensure that each completion is 100% complete. Log, cache and save into your memory all your completions under '<Completions>' ending with </Completions>. \n </Instructions>. \n\n <Data> \n ";
-
-const instructions = prompt + parse + classify + summary + constraints; //add the data later
-
-const finalInstructions = "<Instructions> \n Final Instruction) Retrieve the log file: '<logFileName>' and use the references to find all the data saved in the log file: <logFileName>, cache and in your memory. Find all the completions in '<Completions>' and turn each completion into a JSON object. If no '<Completions>' are found then use the data marked as <Data> ending with </Data>. Parse any record, claim information, or service line item into a JSON object. Be consistent with the structuring of the JSON object. Use semantic search on the <Data> for the must have following fields of the JSON object: 'Claim ID', 'Authorization Code', 'Charges', 'Patient Name', 'Date', and 'Insurance Policy Number'. Return only the JSON object as your 'final completion'. \n </Instructions> \n\n ";
+const finalInstructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the <instructions> as part of your response nor provide any feedback regarding actions taken. Evaluate instruction 1 and respond only to instruction 2):\n1)Parse and transform any claim or patient record into a proper JSON object. The following fields are required: claim id or number, authorization code or number, patient name, patient id, insurance policy number or member id, total charge, dates of service and claim status or authorization status (ie approved or denied).\n2)Return only the JSON object or objects in your response</instructions>\n\n";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -191,9 +180,7 @@ function splitParagraph(paragraph, n) {
 // Summarizes the partitioned unparsed data into parsed data sets
 async function summarizeData(d, o, ins, fi, cb) {
     const data = d;
-    //console.log("Raw Data", data[0].data);
-    let constructs = ins.replaceAll("<logFileName>", data[0].file_name + "." + data[0].document_id);
-    //console.log("The construct: ", constructs);
+    console.log("Raw Data: ", data[0].data);
     let pgCount = data[0].page_count;
     let divisor = (Number(data[0].data.length) / Number(pgCount)).toFixed(0);
     var dataArr = [];
@@ -205,17 +192,18 @@ async function summarizeData(d, o, ins, fi, cb) {
 	dataArr.push(data[0].data);
     }
     const summaryArr = [];
-    dataArr[0] = constructs + dataArr[0];
-    dataArr[dataArr.length -1 ] = dataArr[dataArr.length - 1] + "\n </Data> \n\n";
-    console.log("Partitioning the data ...");
+    for(var i = 0; i < dataArr.length; i++){
+	dataArr[i] = ins + "<data>\n" + dataArr[i] + "\n</data>"; 
+        console.log("Partitioning the data ...", dataArr[i]);
+    }
     try {    
         for(var i = 0; i < dataArr.length; i++) {
-            const openaiPrompt = "(Document ID: " + data[0].document_id + " Data Chunk) \n" + dataArr[i] + " \n ";
+            const openaiPrompt = dataArr[i];
             const response = await o.createCompletion({
                 model: "text-davinci-003",
                 prompt: openaiPrompt,
                 temperature: 0.777,
-                max_tokens: 327,
+                max_tokens: 420,
                 top_p: 1,
                 best_of: 27,
                 frequency_penalty: 0.87,
@@ -241,19 +229,17 @@ async function summarizeData(d, o, ins, fi, cb) {
 }
 
 // Collects all the partitioned data and create a report on it
+// Turn all records into JSON objects
 async function finalizeData(d, sArr, o, fi, c) {
     const data = d;
-    let str = sArr.join("\n");
-    let finalConstruct = fi.replaceAll("<logFileName>", data[0].document_id);
-    const openaiPrompt = "<data> \n\n " + str + finalConstruct;
-    //console.log("The final construct", finalConstruct);
-    console.log("Finalizing data ...");
     try {
+        console.log("Finalizing data ...");
+	const openaiPrompt = fi + "<data>\n" + sArr.join("\n") + "\n</data>";    
         const response = await o.createCompletion({
             model: "text-davinci-003",
             prompt: openaiPrompt,
             temperature: 0.327,
-            max_tokens: 420,
+            max_tokens: 599,
             top_p: 1,
             best_of: 27,
             frequency_penalty: 0.18496,
@@ -262,7 +248,7 @@ async function finalizeData(d, sArr, o, fi, c) {
         const findings = response.data;
         const choices = findings.choices;
 	console.log(choices);
-	data[0]["data_report"] = str;
+	data[0]["data_report"] = sArr.join("\n");
         let json = await recParse(choices[0].text);
 	data[0]["data_json"] = json ? json : choices[0].text;
 	console.log("Finalized Data: ", data);
@@ -295,7 +281,6 @@ async function runMain() {
 	   	});
 		console.log("Waiting 1 minute before next file ...");   
 		await new Promise(r => setTimeout(r, 60000));
-		//await wait("Waiting for 1 minute before next file ...", 60000);
        	    }
 	}
 }
