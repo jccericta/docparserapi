@@ -154,7 +154,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 /* 					THE PROMPT					          */
-const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6) :\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text.\n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record should have the following fields: claim number or id, authorization code, status and or number, insurance policy id or member id, dates of service, charges, totals or balances, patient name and or patient id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize the data by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response</instructions>\n\n";
+const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6) :\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text.\n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record should have the following fields: claim number or id, authorization status, code and or number, insurance policy id or member id, dates of service, charges, totals or balances, patient name and or patient id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize the data by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response. Make sure to evaluate your work by double or tripple checking your answers by analyzing the <data> differently and or creatively.\n</instructions>\n\n";
 
 const finalInstructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the <instructions> as part of your response nor provide any feedback regarding actions taken. Evaluate instruction 1 and respond only to instruction 2):\n1)Parse and transform any claim or patient record into a proper JSON object. The following fields are required: claim id or number, authorization code or number, patient name, patient id, insurance policy number or member id, total charge, dates of service and claim status or authorization status (ie approved or denied).\n2)Return only the JSON object or objects in your response</instructions>\n\n";
 
@@ -177,14 +177,29 @@ function splitParagraph(paragraph, n) {
      return result;
 }
 
+async function retry(tries, func) {
+	try { 
+		return await func();	
+	}
+	catch {
+		if (tries > 0) {
+			return await retry(tries--, func)
+		}
+		else {
+			return false;
+		}
+	}
+} 
+
 // Summarizes the partitioned unparsed data into parsed data sets
-async function summarizeData(d, o, ins, fi, cb) {
+async function summarizeData(d, o, ins, fi, cb, retry) {
+    let tries = retry ? retry : 3;
     const data = d;
     console.log("Raw Data: ", data[0].data);
     let pgCount = data[0].page_count;
     let divisor = (Number(data[0].data.length) / Number(pgCount)).toFixed(0);
     var dataArr = [];
-    if(divisor > 1) {
+    if(pgCount > 1) {
 	// partition the unparsed data into equal
         dataArr = splitParagraph(data[0].data, divisor); 
     }
@@ -198,6 +213,7 @@ async function summarizeData(d, o, ins, fi, cb) {
     }
     try {    
         for(var i = 0; i < dataArr.length; i++) {
+	    console.log("Summarizing data: ", i)	
             const openaiPrompt = dataArr[i];
             const response = await o.createCompletion({
                 model: "text-davinci-003",
@@ -211,51 +227,72 @@ async function summarizeData(d, o, ins, fi, cb) {
             });
             const findings = response.data;
             const choices = findings.choices;
-            console.log("Summarizing data: ", i)
 	    console.log(choices);
             let dt = choices[0].text;
             data[0]["data_"+i] = dt; // push partitioned summaries into object
             summaryArr.push(dt);
             console.log("Waiting 30 seconds before proceeding ...");
-            await new Promise(r => setTimeout(r, 30000));
+            await new Promise(r => setTimeout(r, 630000));
         }
 	await cb(data, summaryArr, o, fi, function(c){
 	    c();
 	});
     }
     catch(e) {
-        if(e) throw e;
+        if(e) console.log("Error on OpenAI: ", e);
+	if(tries > 0){
+		console.log("Waiting before trying again ...", 60000 + (60000/tries));
+		await new Promise(r => setTimeout(r, 60000 + (60000/tries)));
+		return await retry(tries, function() { summarizeData(d,o,ins,fi,cb, tries) });
+	}
     }
 }
 
 // Collects all the partitioned data and create a report on it
 // Turn all records into JSON objects
-async function finalizeData(d, sArr, o, fi, c) {
+async function finalizeData(d, sArr, o, fi, c, retry) {
+    let tries =  retry ? retry : 3;
     const data = d;
+    const fdArr = [];
     try {
-        console.log("Finalizing data ...");
-	const openaiPrompt = fi + "<data>\n" + sArr.join("\n") + "\n</data>";    
-        const response = await o.createCompletion({
-            model: "text-davinci-003",
-            prompt: openaiPrompt,
-            temperature: 0.327,
-            max_tokens: 599,
-            top_p: 1,
-            best_of: 27,
-            frequency_penalty: 0.18496,
-            presence_penalty: 0.136,
+	for(var i = 0; i < sArr.length; i++){    
+            console.log("Finalizing data ...", i);
+     	    const openaiPrompt = fi + "<data>\n" + sArr[i] + "\n</data>";    
+            const response = await o.createCompletion({
+            	model: "text-davinci-003",
+	        prompt: openaiPrompt,
+        	temperature: 0.327,
+            	max_tokens: 599,
+            	top_p: 1,
+            	best_of: 27,
+            	frequency_penalty: 0.18496,
+            	presence_penalty: 0.136,
         });
-        const findings = response.data;
-        const choices = findings.choices;
-	console.log(choices);
-	data[0]["data_report"] = sArr.join("\n");
-        let json = await recParse(choices[0].text);
-	data[0]["data_json"] = json ? json : choices[0].text;
-	console.log("Finalized Data: ", data);
+            const findings = response.data;
+            const choices = findings.choices;
+	    console.log(choices);
+	    let json = await recParse(choices[0].text);
+	    //data[0]["data_json_"+i] = json ? json : choices[0].text;
+	    let jsonData = json ? json : choices[0].text;
+	    fdArr.push(jsonData);
+	    console.log("JSON Data " + i + ": ", jsonData);
+	    console.log("Waiting 30 seconds before proceeding ...");
+            await new Promise(r => setTimeout(r, 30000));
+	}
+	for(var i = 0; i < fdArr.length; i++){
+	    data[0]["data_json_"+i] = fdArr[i];
+	}
+        data[0]["data_report"] = sArr.join("\n");
+	console.log("Finalized Data", data);    
         await c(data);
     }
     catch(e) {
-        if(e) throw e;
+	if(e) console.log("Error on OpenAI: ", e);
+	if(tries > 0) {
+		console.log("Waiting before trying again ...", 60000 + (60000/tries));
+		await new Promise(r => setTimeout(r, 60000 + (60000/tries)));
+		return await retry(tries, function() { finalizeData(d,sArr,o,fi,c, tries) });
+	}
     }
 }
 
@@ -279,8 +316,10 @@ async function runMain() {
 	 	    const file_name = data.file_name.replace(".pdf", "." + id + ".json");	 
                     main(data, connStr, jsonFolder, filePath, file_name);
 	   	});
-		console.log("Waiting 1 minute before next file ...");   
-		await new Promise(r => setTimeout(r, 60000));
+		if(files.length - i > 1) {
+		    console.log("Waiting 5 mins before processing the next file ...");   
+		    await new Promise(r => setTimeout(r, 300000));
+		}
        	    }
 	}
 }
