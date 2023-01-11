@@ -10,3 +10,4 @@ fs/eobs/json/processed_json/*.json
 fs/eobs/*.pdf
 fs/eobs/processed_vobs/*.pdf
 fs/eobs/processed_eobs/*.pdf
+fs/eobs/fine_tune/*.jsonl

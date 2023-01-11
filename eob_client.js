@@ -18,6 +18,11 @@ const parserId = env.parsed.EOBPARSERID
 const jsonFolder = fsFolder + 'json/';
 const connStr = env.parsed.CONNECTION_STRING;
 
+const eobModel001 = env.parsed.EOBAIMODEL001;
+const eobModel001_2 = env.parsed.EOBAIMODEL001_2;
+const eobSearchModel001 = env.parsed.EOBAISEARCHMODEL001;
+const eobSearchModel001_2 = env.parsed.EOBAISEARCHMODEL001_2;
+
 client.ping().then(function(){
     console.log('Connection to DocParser API established.');
 }).catch(function(err){
@@ -154,9 +159,8 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 /* 					THE PROMPT					          */
-const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6) :\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text.\n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record should have the following fields: claim number or id, authorization status, code and or number, insurance policy id or member id, dates of service, charges, totals or balances, patient name and or patient id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize the data by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response. Make sure to evaluate your work by double or tripple checking your answers by analyzing the <data> differently and or creatively.\n</instructions>\n\n";
-
-const finalInstructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the <instructions> as part of your response nor provide any feedback regarding actions taken. Evaluate instruction 1 and respond only to instruction 2):\n1)Parse and transform any claim or patient record into a proper JSON object. The following fields are required: claim id or number, authorization code or number, patient name, patient id, insurance policy number or member id, total charge, dates of service and claim status or authorization status (ie approved or denied).\n2)Return only the JSON object or objects in your response</instructions>\n\n";
+const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6):\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text. Identify key and value pairings and recoginize tables in the form of running text that is made up of column headers followed by rows of data. \n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals and or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record must have the following fields: provider and or provider id, payee and or payee id, claim number or id, authorization status, code and or number, insurance policy id or member id, dates of service, charges, totals and or balances, patient name and or patient id. Records can be grouped under the same patient name, patient id and or insurance policy number or member id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize your work by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are there any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response.\n</instructions>\n\n";
+const finalInstructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the <instructions> as part of your response nor provide any feedback regarding actions taken. Evaluate instruction 1 and respond only to instruction 2):\n1) Create an embedding of the data to use as a look up table to parse and transform any claim or patient record into a proper JSON object. The following fields are required and must be present within the JSON object: classification, medical provider, payee, claim id or number, authorization code and or number, patient name, patient id, insurance policy number or member id, totals, charges, and or balances, dates of service and claim status or authorization status.\n2)Return only the JSON object or objects in your response.</instructions>\n\n";
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -177,23 +181,11 @@ function splitParagraph(paragraph, n) {
      return result;
 }
 
-async function retry(tries, func) {
-	try { 
-		return await func();	
-	}
-	catch {
-		if (tries > 0) {
-			return await retry(tries--, func)
-		}
-		else {
-			return false;
-		}
-	}
-} 
+let maxRetries = 3;
+let sTries = maxRetries;
 
 // Summarizes the partitioned unparsed data into parsed data sets
-async function summarizeData(d, o, ins, fi, cb, retry) {
-    let tries = retry ? retry : 3;
+async function summarizeData(d, o, ins, fi, cb) {
     const data = d;
     console.log("Raw Data: ", data[0].data);
     let pgCount = data[0].page_count;
@@ -209,14 +201,15 @@ async function summarizeData(d, o, ins, fi, cb, retry) {
     const summaryArr = [];
     for(var i = 0; i < dataArr.length; i++){
 	dataArr[i] = ins + "<data>\n" + dataArr[i] + "\n</data>"; 
-        console.log("Partitioning the data ...", dataArr[i]);
+        //console.log("Partitioning the data ...", dataArr[i]);
     }
     try {    
         for(var i = 0; i < dataArr.length; i++) {
 	    console.log("Summarizing data: ", i)	
             const openaiPrompt = dataArr[i];
             const response = await o.createCompletion({
-                model: "text-davinci-003",
+         	model: eobModel001 ? eobModel001 : eobModel001_2,
+		search_model: eobSearchModel001 ? eobSearchModel001 : eobSearchModel001_2,
                 prompt: openaiPrompt,
                 temperature: 0.777,
                 max_tokens: 420,
@@ -232,7 +225,7 @@ async function summarizeData(d, o, ins, fi, cb, retry) {
             data[0]["data_"+i] = dt; // push partitioned summaries into object
             summaryArr.push(dt);
             console.log("Waiting 30 seconds before proceeding ...");
-            await new Promise(r => setTimeout(r, 630000));
+            await new Promise(r => setTimeout(r, 30000));
         }
 	await cb(data, summaryArr, o, fi, function(c){
 	    c();
@@ -240,18 +233,19 @@ async function summarizeData(d, o, ins, fi, cb, retry) {
     }
     catch(e) {
         if(e) console.log("Error on OpenAI: ", e);
-	if(tries > 0){
-		console.log("Waiting before trying again ...", 60000 + (60000/tries));
-		await new Promise(r => setTimeout(r, 60000 + (60000/tries)));
-		return await retry(tries, function() { summarizeData(d,o,ins,fi,cb, tries) });
+	if(sTries > 0){
+		sTries--;
+		console.log("Waiting before trying again ...", 60000 + (60000/sTries));
+		await new Promise(r => setTimeout(r, 60000 + (60000/sTries)));
+		return await summarizeData(d,o,ins,fi,cb);
 	}
     }
 }
 
+let fTries = maxRetries;
 // Collects all the partitioned data and create a report on it
 // Turn all records into JSON objects
-async function finalizeData(d, sArr, o, fi, c, retry) {
-    let tries =  retry ? retry : 3;
+async function finalizeData(d, sArr, o, fi, c) {
     const data = d;
     const fdArr = [];
     try {
@@ -288,10 +282,11 @@ async function finalizeData(d, sArr, o, fi, c, retry) {
     }
     catch(e) {
 	if(e) console.log("Error on OpenAI: ", e);
-	if(tries > 0) {
-		console.log("Waiting before trying again ...", 60000 + (60000/tries));
-		await new Promise(r => setTimeout(r, 60000 + (60000/tries)));
-		return await retry(tries, function() { finalizeData(d,sArr,o,fi,c, tries) });
+	if(fTries > 0) {
+		fTries--;
+		console.log("Waiting before trying again ...", 60000 + (60000/fTries));
+		await new Promise(r => setTimeout(r, 60000 + (60000/fTries)));
+		return await finalizeData(d,sArr,o,fi,c);
 	}
     }
 }
