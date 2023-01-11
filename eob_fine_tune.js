@@ -14,12 +14,9 @@ const configuration = new Configuration({
 });
 
 const openai = new OpenAIApi(configuration);
-
 const connStr = env.parsed.CONNECTION_STRING;
-
-const doc1 = env.parsed.example_1_ID ? env.parsed.example_1_ID : "bbb7224f649bd6dfc2244829cdc21c96";
-
-const eobModel = env.parsed.EOBAIMODEL ? env.parsed.EOBAIMODEL : 'davinci:ft-the-edge-treatment:steelgem-eob-001-2023-01-10-00-20-17';
+const doc1 = "bbb7224f649bd6dfc2244829cdc21c96";
+const eobModel = env.parsed.EOBAIMODEL001 ? env.parsed.EOBAIMODEL001 : env.parsed.EOBAIMODEL001_2;
 
 // Splits the unparsed data into equal substrings in length
 function splitParagraph(paragraph, n) {
@@ -72,12 +69,7 @@ async function getMongoData(cStr) {
 	    }
 }
 
-
-// let mongoData = await getMongoData(connStr);
-
 const instructions = "<instructions>\n0) Perform the following tasks on the data enclosed in '<data>' ending with '</data>' (DO NOT include or regurgitate any of the '<instructions>' in your response nor provide any feedback regarding actions taken. Evaluate instructions 1,2,3,4,5 and respond only to instruction 6):\n1) Tokenize each word and assign numerical values to each word to create relationships within the <data> and to create a vector representations of each word to aid in semantic searching of the text. Identify key and value pairings and recoginize tables in the form of running text that is made up of column headers followed by rows of data. \n2) Search for key terms belonging to an insurance policy, insurance claim, explanation of benefits, remittance advice and or patient information. Then extract information such as payee, medical provider, claim number or id, authorization number, code or status, patient name, patient id, dates, services, charges, totals and or balances, and insurance policy id or member id and etc to create a record suitable for a SQL database. Each record must have the following fields: provider and or provider id, payee and or payee id, claim number or id, authorization status, code and or number, insurance policy id or member id, dates of service, charges, totals and or balances, patient name and or patient id. Records can be grouped under the same patient name, patient id and or insurance policy number or member id.\n3) Classify each record as either an explanation of benefits, remittance advice or reimbursement (overpay).\n4) For any policy, briefly summarize the policy, highlighting grace periods, coverage, and or appeals. Disregard any legalities, prohibits and or disclosures.\n5) Validate and summarize your work by answering the following questions: How many claim items or patient records are there and what are their IDs and or authorization codes? Has the claim been denied or approved? Who are the payers and how much do they each owe and or are there any outstanding balances? Who are the payees and providers and are there any requirements needed to be resolved? Lastly when was the claim sent or when was the claim received?\n6)Only return the records created or if no record exists return a summary of the data in your response.\n</instructions>\n\n";
-
-// console.log("Mongo Data: ", mongoData);
 
 async function createEOBTrainingFile_1(dt, ins){
      try {
@@ -226,9 +218,6 @@ async function createEOBTrainingFile_3() {
        return response;
 }
 
-//const eobTrainingFile_1 = await createEOBTrainingFile_1(mongoData, instructions);
-//console.log("EOB Training File 1 Data: ", eobTrainingFile_1);
-
 async function getTrainingFiles() {
     try {
 	const files = await openai.listFiles();
@@ -248,8 +237,8 @@ async function createTuningJob() {
 	        training_file: eobTrainingFile_1["data"]["id"],
 		model: eobModel ? eobModel : "davinci",
 		suffix: "steelgem-eob-001"
-        });*/
-	/*const eobTrainingFile_2 = await createEOBTrainingFile_2();
+        });
+	const eobTrainingFile_2 = await createEOBTrainingFile_2();
         const response2 = await openai.createFineTune({
                 training_file: eobTrainingFile_2["data"]["id"],
                 model:  "davinci",
@@ -258,8 +247,9 @@ async function createTuningJob() {
 	const eobTrainingFile_3 = await createEOBTrainingFile_3();
         const response3 = await openai.createFineTune({
                   training_file: eobTrainingFile_3["data"]["id"],
-		  model:  "davinci",
-		  suffix: "steelgem-eob-003"
+		  //model:  "davinci",
+		  //suffix: "steelgem-eob-003"
+		  fine_tuned_model: eobModel 
 	});
      }
      catch (e) {
@@ -280,10 +270,9 @@ async function clearTunes(m, i) {
 			    console.log("Cancelled tune job: ", response);
 			}
 			if(fineTunes[i].fine_tuned_model !== model
-			                                && fineTunes[i].status === "succeeded") {
-			    console.log("Found other fined tuned model: ", fineTunes[i].fine_tuned_model);
-			    //const response = await openai.deleteModel(fineTunes[i].model);
-			    //console.log("Deleted fine tuned model: ", response);
+			   && fineTunes[i].status === "succeeded") {
+			    console.log("Found other fined tuned model: ", 
+			     	          fineTunes[i].fine_tuned_model);
 			}
 		}
 		else {
@@ -296,7 +285,8 @@ async function clearTunes(m, i) {
 			if(fineTunes[i].id !== id && fineTunes[i].status === "succeeded") {
 				//const response = await openai.deleteModel(fineTunes[i].model);
                                 //console.log("Deleted fine tuned model: ", response);
-			     console.log("Found other fined tuned model: ", fineTunes[i].fine_tuned_model);
+			     console.log("Found other fined tuned model: ", 
+				     fineTunes[i].fine_tuned_model);
 			}
 		}
 	}
@@ -314,8 +304,8 @@ async function main() {
 		//await clearTunes(eobModel,'ft-GiW3Olwbk3C72CYuYU2IPqWA');
 		//console.log("Creatomg tuning job ...");
 		//await createTuningJob();
-		console.log("Getting fine tune jobs ...");
-		await getFineTunes();
+		//console.log("Getting fine tune jobs ...");
+		//await getFineTunes();
 		console.log("Getting models");
 		const response = await openai.listModels();
 		console.log(response["data"]);

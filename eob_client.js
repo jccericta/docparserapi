@@ -20,6 +20,7 @@ const connStr = env.parsed.CONNECTION_STRING;
 
 const eobModel001 = env.parsed.EOBAIMODEL001;
 const eobModel001_2 = env.parsed.EOBAIMODEL001_2;
+const eobModel002 = env.parsed.EOBAIMODEL002;
 const eobSearchModel001 = env.parsed.EOBAISEARCHMODEL001;
 const eobSearchModel001_2 = env.parsed.EOBAISEARCHMODEL001_2;
 
@@ -211,12 +212,13 @@ async function summarizeData(d, o, ins, fi, cb) {
          	model: eobModel001 ? eobModel001 : eobModel001_2,
 		search_model: eobSearchModel001 ? eobSearchModel001 : eobSearchModel001_2,
                 prompt: openaiPrompt,
+		// controls randomness, 0 to make it deterministic, 1 more creative
                 temperature: 0.777,
                 max_tokens: 420,
                 top_p: 1,
                 best_of: 27,
-                frequency_penalty: 0.87,
-                presence_penalty: 0.327,
+                frequency_penalty: 0.327,
+                presence_penalty: 0.5,
             });
             const findings = response.data;
             const choices = findings.choices;
@@ -253,13 +255,13 @@ async function finalizeData(d, sArr, o, fi, c) {
             console.log("Finalizing data ...", i);
      	    const openaiPrompt = fi + "<data>\n" + sArr[i] + "\n</data>";    
             const response = await o.createCompletion({
-            	model: "text-davinci-003",
+            	model: eobModel002,
 	        prompt: openaiPrompt,
-        	temperature: 0.327,
+        	temperature: 0.18496,
             	max_tokens: 599,
             	top_p: 1,
             	best_of: 27,
-            	frequency_penalty: 0.18496,
+            	frequency_penalty: 0.327,
             	presence_penalty: 0.136,
         });
             const findings = response.data;
